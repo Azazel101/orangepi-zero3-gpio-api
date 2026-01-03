@@ -1,0 +1,16 @@
+[Unit]
+Description=Orange Pi GPIO FastAPI Service
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/root/opi_gpio_app
+ExecStart=/root/opi_gpio_app/venv/bin/python3 main.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/root/opi_gpio_app/app.log
+StandardError=append:/root/opi_gpio_app/app.log
+
+[Install]
+WantedBy=multi-user.target

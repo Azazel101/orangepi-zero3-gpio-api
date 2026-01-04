@@ -147,7 +147,28 @@ app = FastAPI(
     title="Orange Pi Zero 3 GPIO API (v2)",
     description="""
 A FastAPI application with Input and Interrupt support for Orange Pi Zero 3.
-""",
+
+![Orange Pi Zero 3 Pinout](/static/pinout.png)
+
+### Corrected Mapping Table (Orange Pi Zero 3 v1.2)
+| Header Pin | Image Label | GPIO Bank | Line Offset |
+| :--- | :--- | :--- | :--- |
+| **Pin 3** | PH5 | PH | **229** |
+| **Pin 5** | PH4 | PH | **228** |
+| **Pin 7** | PC9 | PC | **73** |
+| **Pin 11** | PC6 | PC | **70** |
+| **Pin 12** | PC11 | PC | **75** |
+| **Pin 13** | PC5 | PC | **69** |
+| **Pin 15** | PC8 | PC | **72** |
+| **Pin 16** | PC15 | PC | **79** |
+| **Pin 18** | PC14 | PC | **78** |
+| **Pin 19** | PH7 | PH | **231** |
+| **Pin 21** | PH8 | PH | **232** |
+| **Pin 22** | PC7 | PC | **71** |
+| **Pin 23** | PH6 | PH | **230** |
+| **Pin 24** | PH9 | PH | **233** |
+| **Pin 26** | PC10 | PC | **74** |
+    """,
     version="1.2.0",
     lifespan=lifespan
 )

@@ -39,6 +39,28 @@ else
     echo "Error: $SERVICE_FILE not found in $APP_DIR"
 fi
 
+# 5. Initialize Git for OTA (if not already a git repo)
+echo "Initializing Git for OTA updates..."
+if [ ! -d "$APP_DIR/.git" ]; then
+    cd "$APP_DIR"
+    git init
+    git remote add origin https://github.com/Azazel101/orangepi-zero3-gpio-api.git
+    git fetch --all
+    git reset --hard origin/main
+    echo "Git initialized and linked to origin/main"
+else
+    # Ensure remote is clean
+    cd "$APP_DIR"
+    git config --global --add safe.directory "$APP_DIR"
+    current_remote=$(git remote get-url origin 2>/dev/null)
+    if [ "$current_remote" != "https://github.com/Azazel101/orangepi-zero3-gpio-api.git" ]; then
+        echo "Updating git remote..."
+        git remote remove origin
+        git remote add origin https://github.com/Azazel101/orangepi-zero3-gpio-api.git
+    fi
+     git fetch --all
+fi
+
 echo "--- Installation Complete ---"
 echo "You can check status with: systemctl status $SERVICE_FILE"
 echo "API is running on: http://$(hostname -I | awk '{print $1}'):8000"

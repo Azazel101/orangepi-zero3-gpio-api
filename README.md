@@ -37,6 +37,7 @@ This application is configured for the **26-pin header** of the Orange Pi Zero 3
 
 ## API Usage
 - **Swagger Docs**: `http://<IP>:8000/docs`
+- **Health Check**: `GET /health` (Monitors API, GPIO status, and CPU temperature)
 - **Check Status**: `GET /pins/status` (Now shows if a pin is Input or Output)
 - **Read Interrupts**: `GET /events` (Returns and clears the queue of recent edge events)
 - **Set Pin**: `POST /pins/set {"pin_num": 15, "state": 1}`

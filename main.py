@@ -150,7 +150,7 @@ A FastAPI application with Input and Interrupt support for Orange Pi Zero 3.
 
 ![Orange Pi Zero 3 Pinout](/static/pinout.png)
 
-### Corrected Mapping Table (Orange Pi Zero 3 v1.2)
+### Mapping Table (Orange Pi Zero 3 v1.2)
 | Header Pin | Image Label | GPIO Bank | Line Offset |
 | :--- | :--- | :--- | :--- |
 | **Pin 3** | PH5 | PH | **229** |
@@ -180,6 +180,25 @@ async def root():
     return {
         "message": "Orange Pi GPIO API with Input/Interrupt Support",
         "active_pins": list(pin_mapping.keys())
+    }
+
+@app.get("/health")
+async def health():
+    # Try to get CPU temperature
+    cpu_temp = "unknown"
+    try:
+        if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
+            with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                cpu_temp = int(f.read().strip()) / 1000.0
+    except:
+        pass
+
+    return {
+        "status": "healthy",
+        "gpio_initialized": len(line_requests) > 0,
+        "claimed_pins_count": len(line_requests),
+        "interrupt_monitor_running": interrupt_task is not None and not interrupt_task.done(),
+        "cpu_temperature_c": cpu_temp
     }
 
 @app.get("/pins/status")

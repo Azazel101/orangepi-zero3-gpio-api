@@ -61,6 +61,20 @@ Example `/events` response:
 }
 ```
 
+## Loxone Integration
+This API serves as a native extension for Loxone Smart Home.
+
+### 1. Download Templates
+Use these endpoints to download pre-configured XML templates for Loxone Config:
+- **Virtual Inputs**: `GET /loxone/template/inputs`
+- **Virtual Outputs**: `GET /loxone/template/outputs`
+
+### 2. Status for Parsing
+Loxone can poll the plain-text status endpoint which is optimized for "Command Recognition":
+- `GET /loxone/status`
+- Format: `Pin X=Y` (Example: `Pin 26=1`)
+- Command Recognition Pattern: `Pin 26=\v`
+
 ## Service Management
 The application is configured as a `systemd` service and will start automatically on boot.
 

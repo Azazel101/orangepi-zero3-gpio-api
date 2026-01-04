@@ -69,6 +69,7 @@ Use these endpoints to download pre-configured XML templates for Loxone Config:
 - **Virtual Inputs**: `GET /loxone/template/inputs`
 - **Virtual Outputs**: `GET /loxone/template/outputs`
 - **System Stats**: `GET /loxone/template/stats`
+- **OTA Update**: `POST /update/ota` (Triggers `git pull` from GitHub and restarts service)
 
 ### 2. Status for Parsing
 Loxone can poll the plain-text status endpoint which is optimized for "Command Recognition":

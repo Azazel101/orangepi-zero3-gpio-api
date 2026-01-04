@@ -581,10 +581,38 @@ async def get_loxone_stats_template():
     
     return Response(content="\n".join(xml_lines), media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="OrangePi_Stats.xml"'})
 
+@app.get("/update/check")
+async def check_update():
+    """Check if update is available"""
+    try:
+        # Fetch latest changes without applying
+        subprocess.run(["git", "fetch", "origin", "main"], cwd="/root/opi_gpio_app", check=True)
+        
+        # Get local and remote hashes
+        local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
+        remote_hash = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd="/root/opi_gpio_app", text=True).strip()
+        
+        update_available = local_hash != remote_hash
+        return {
+            "update_available": update_available,
+            "local_hash": local_hash,
+            "remote_hash": remote_hash
+        }
+    except Exception as e:
+        return {"error": str(e), "update_available": False}
+
 @app.post("/update/ota")
-async def ota_update():
+async def ota_update(force: bool = False):
     """Trigger OTA update from GitHub"""
     try:
+        # First check if update is needed (unless forced)
+        if not force:
+             subprocess.run(["git", "fetch", "origin", "main"], cwd="/root/opi_gpio_app", check=True)
+             local = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
+             remote = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd="/root/opi_gpio_app", text=True).strip()
+             if local == remote:
+                 return {"status": "skipped", "message": "Already up to date"}
+
         # Run git pull
         result = subprocess.run(
             ["git", "pull", "origin", "main"],
@@ -594,16 +622,11 @@ async def ota_update():
         )
         
         if result.returncode == 0:
-            # If successful, restart the service to apply changes
-            # We assume systemd will restart the service if we kill the process,
-            # OR we can try to run systemctl restart (requires root)
             log_msg = f"OTA Update Success: {result.stdout}"
             with open(LOG_FILE, "a") as f:
                 f.write(f"INFO: {log_msg}\n")
             
-            # Restart systemd service in a detached way so request can return
             subprocess.Popen("sleep 1 && systemctl restart opi_gpio.service", shell=True)
-            
             return {"status": "success", "message": "Update successful. Restarting service...", "git_output": result.stdout}
         else:
              return {"status": "error", "message": "Git pull failed", "git_output": result.stderr}

@@ -16,7 +16,7 @@ This application is configured for the **26-pin header** of the Orange Pi Zero 3
 
 ![Orange Pi Zero 3 Pinout](pinout.png)
 
-### Corrected Mapping Table (from Official Image)
+### Mapping Table (from Official Image)
 | Header Pin | Image Label | GPIO Bank | GPIO Line Offset |
 | :--- | :--- | :--- | :--- |
 | **Pin 3** | PH5 | PH | **229** |

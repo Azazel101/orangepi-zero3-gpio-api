@@ -7,6 +7,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from gpiod.line import Direction, Value, Edge, Bias
+import shutil
+import platform
+from datetime import timedelta
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 
@@ -182,23 +185,121 @@ async def root():
         "active_pins": list(pin_mapping.keys())
     }
 
+def get_system_info():
+    info = {
+        "board": "unknown",
+        "os": "unknown",
+        "kernel": platform.release(),
+        "arch": platform.machine(),
+        "uptime": "unknown",
+        "load_avg": [],
+        "ram": {"total": 0, "available": 0, "percent": 0},
+        "disk": {"total": 0, "used": 0, "free": 0, "percent": 0}
+    }
+
+    # Board Info
+    if os.path.exists("/etc/armbian-release"):
+        try:
+            with open("/etc/armbian-release", "r") as f:
+                for line in f:
+                    if line.startswith("BOARD_NAME="):
+                        info["board"] = line.split("=")[1].strip().strip('"')
+                        break
+        except: pass
+
+    # OS Info
+    if os.path.exists("/etc/os-release"):
+        try:
+            with open("/etc/os-release", "r") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        info["os"] = line.split("=")[1].strip().strip('"')
+                        break
+        except: pass
+
+    # Uptime
+    if os.path.exists("/proc/uptime"):
+        try:
+            with open("/proc/uptime", "r") as f:
+                uptime_seconds = float(f.readline().split()[0])
+                info["uptime"] = str(timedelta(seconds=int(uptime_seconds)))
+        except: pass
+
+    # Load Average
+    if os.path.exists("/proc/loadavg"):
+        try:
+            with open("/proc/loadavg", "r") as f:
+                info["load_avg"] = [float(x) for x in f.read().split()[:3]]
+        except: pass
+
+    # RAM Usage
+    if os.path.exists("/proc/meminfo"):
+        try:
+            mem = {}
+            with open("/proc/meminfo", "r") as f:
+                for line in f:
+                    parts = line.split(":")
+                    if len(parts) == 2:
+                        name = parts[0].strip()
+                        val = int(parts[1].split()[0])
+                        mem[name] = val
+            total = mem.get("MemTotal", 0)
+            free = mem.get("MemFree", 0)
+            buffers = mem.get("Buffers", 0)
+            cached = mem.get("Cached", 0)
+            available = free + buffers + cached
+            info["ram"] = {
+                "total_mb": round(total / 1024, 1),
+                "available_mb": round(available / 1024, 1),
+                "percent": round(100 * (1 - available / total), 1) if total > 0 else 0
+            }
+        except: pass
+
+    # Disk Usage
+    try:
+        usage = shutil.disk_usage("/")
+        info["disk"] = {
+            "total_gb": round(usage.total / (2**30), 1),
+            "used_gb": round(usage.used / (2**30), 1),
+            "free_gb": round(usage.free / (2**30), 1),
+            "percent": round(100 * usage.used / usage.total, 1)
+        }
+    except: pass
+
+    return info
+
 @app.get("/health")
 async def health():
-    # Try to get CPU temperature
+    # CPU temperature
     cpu_temp = "unknown"
     try:
         if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
             with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                 cpu_temp = int(f.read().strip()) / 1000.0
-    except:
-        pass
+    except: pass
+
+    sys_info = get_system_info()
 
     return {
         "status": "healthy",
-        "gpio_initialized": len(line_requests) > 0,
-        "claimed_pins_count": len(line_requests),
-        "interrupt_monitor_running": interrupt_task is not None and not interrupt_task.done(),
-        "cpu_temperature_c": cpu_temp
+        "board_info": {
+            "name": sys_info["board"],
+            "os": sys_info["os"],
+            "kernel": sys_info["kernel"],
+            "arch": sys_info["arch"],
+            "uptime": sys_info["uptime"]
+        },
+        "system_stats": {
+            "cpu_temp_c": cpu_temp,
+            "load_avg": sys_info["load_avg"],
+            "ram": sys_info["ram"],
+            "disk": sys_info["disk"]
+        },
+        "gpio_status": {
+            "initialized": len(line_requests) > 0,
+            "claimed_pins_count": len(line_requests),
+            "interrupt_monitor_running": interrupt_task is not None and not interrupt_task.done()
+        }
     }
 
 @app.get("/pins/status")

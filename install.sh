@@ -14,7 +14,7 @@ echo "--- Installing Orange Pi GPIO API ---"
 # 1. Install system dependencies
 echo "Installing system dependencies..."
 apt update
-apt install -y python3-venv libgpiod-dev gpiod
+apt install -y python3-venv libgpiod-dev gpiod git
 
 # 2. Setup Virtual Environment
 echo "Setting up Python virtual environment..."

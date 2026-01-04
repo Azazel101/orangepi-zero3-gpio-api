@@ -37,11 +37,28 @@ This application is configured for the **26-pin header** of the Orange Pi Zero 3
 
 ## API Usage
 - **Swagger Docs**: `http://<IP>:8000/docs`
-- **Check Status**: `GET /pins/status`
+- **Check Status**: `GET /pins/status` (Now shows if a pin is Input or Output)
+- **Read Interrupts**: `GET /events` (Returns and clears the queue of recent edge events)
 - **Set Pin**: `POST /pins/set {"pin_num": 15, "state": 1}`
 - **Toggle Pin**: `POST /pins/toggle/15`
 - **Set All Low**: `POST /pins/all/low`
 - **View Logs**: `GET /logs`
+
+## Input & Interrupts
+The API now supports configuring pins as inputs with edge detection (interrupts).
+
+- **Configuration**: Set `"direction": "input"` and optional `"bias": "pull-up"`/`"pull-down"` in `gpio_config.json`.
+- **Interrupts**: The system automatically monitors inputs for both Rising and Falling edges. 
+- **Retrieval**: Use the `/events` endpoint to fetch the event queue. Each event includes the pin number, event type, and a nanosecond timestamp.
+
+Example `/events` response:
+```json
+{
+  "events": [
+    {"pin": 26, "event": "Falling", "timestamp": "48114713864866"}
+  ]
+}
+```
 
 ## Service Management
 The application is configured as a `systemd` service and will start automatically on boot.

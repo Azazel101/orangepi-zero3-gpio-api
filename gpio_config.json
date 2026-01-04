@@ -4,91 +4,107 @@
       "num": 3,
       "chip": 1,
       "line": 229,
-      "name": "PH5"
+      "name": "PH5",
+      "direction": "output"
     },
     {
       "num": 5,
       "chip": 1,
       "line": 228,
-      "name": "PH4"
+      "name": "PH4",
+      "direction": "output"
     },
     {
       "num": 7,
       "chip": 1,
       "line": 73,
-      "name": "PC9"
+      "name": "PC9",
+      "direction": "output"
     },
     {
       "num": 11,
       "chip": 1,
       "line": 70,
-      "name": "PC6"
+      "name": "PC6",
+      "direction": "output"
     },
     {
       "num": 12,
       "chip": 1,
       "line": 75,
-      "name": "PC11"
+      "name": "PC11",
+      "direction": "output"
     },
     {
       "num": 13,
       "chip": 1,
       "line": 69,
-      "name": "PC5"
+      "name": "PC5",
+      "direction": "output"
     },
     {
       "num": 15,
       "chip": 1,
       "line": 72,
-      "name": "PC8"
+      "name": "PC8",
+      "direction": "output"
     },
     {
       "num": 16,
       "chip": 1,
       "line": 79,
-      "name": "PC15"
+      "name": "PC15",
+      "direction": "output"
     },
     {
       "num": 18,
       "chip": 1,
       "line": 78,
-      "name": "PC14"
+      "name": "PC14",
+      "direction": "output"
     },
     {
       "num": 19,
       "chip": 1,
       "line": 231,
-      "name": "PH7"
+      "name": "PH7",
+      "direction": "output"
     },
     {
       "num": 21,
       "chip": 1,
       "line": 232,
-      "name": "PH8"
+      "name": "PH8",
+      "direction": "output"
     },
     {
       "num": 22,
       "chip": 1,
       "line": 71,
-      "name": "PC7"
+      "name": "PC7",
+      "direction": "output"
     },
     {
       "num": 23,
       "chip": 1,
       "line": 230,
-      "name": "PH6"
+      "name": "PH6",
+      "direction": "output"
     },
     {
       "num": 24,
       "chip": 1,
       "line": 233,
-      "name": "PH9"
+      "name": "PH9",
+      "direction": "output"
     },
     {
       "num": 26,
       "chip": 1,
       "line": 74,
-      "name": "PC10"
+      "name": "PC10",
+      "direction": "input",
+      "bias": "pull-up"
     }
   ]
 }

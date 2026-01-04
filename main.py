@@ -443,17 +443,17 @@ async def get_loxone_input_template():
     ]
 
     for pin_cfg in config["pins"]:
-        pin_num = pin_cfg["num"]
-        name = pin_cfg.get("name", str(pin_num))
-        # Check String: "Pin X=\v"
-        
-        # Using the standard attributes from the user's weather example, adapted for digital pins
-        # Analog="true" is safer for value conversion even if digital (0/1)
-        xml_lines.append(
-            f'  <VirtualInHttpCmd Title="Pin {pin_num} ({name})" Comment="" Check="Pin {pin_num}=\\v" '
-            f'Signed="true" Analog="true" SourceValLow="0" DestValLow="0" SourceValHigh="1" DestValHigh="1" '
-            f'DefVal="0" MinVal="0" MaxVal="1" Unit="" HintText=""/>'
-        )
+        # Only generate Virtual Inputs for pins explicitly configured as 'input'
+        if pin_cfg.get("direction", "output").lower() == "input":
+            pin_num = pin_cfg["num"]
+            name = pin_cfg.get("name", str(pin_num))
+            
+            # Using the standard attributes from the user's weather example, adapted for digital pins
+            xml_lines.append(
+                f'  <VirtualInHttpCmd Title="Pin {pin_num} ({name})" Comment="" Check="Pin {pin_num}=\\v" '
+                f'Signed="true" Analog="true" SourceValLow="0" DestValLow="0" SourceValHigh="1" DestValHigh="1" '
+                f'DefVal="0" MinVal="0" MaxVal="1" Unit="" HintText=""/>'
+            )
 
     xml_lines.append('</VirtualInHttp>')
     

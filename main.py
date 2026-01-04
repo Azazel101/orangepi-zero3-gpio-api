@@ -3,7 +3,7 @@ import gpiod
 import os
 import asyncio
 from datetime import timedelta
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -341,7 +341,22 @@ async def get_events():
     return {"events": events}
 
 @app.post("/pins/set")
-async def set_pin(data: PinState):
+async def set_pin(request: Request):
+    try:
+        # Loxone sends Content-Type: text/plain, which FastAPI rejects for Pydantic models.
+        # We manually parse the body to support this behavior.
+        body_bytes = await request.body()
+        if not body_bytes:
+             raise HTTPException(status_code=400, detail="Empty body")
+             
+        try:
+            body_json = json.loads(body_bytes)
+            data = PinState(**body_json)
+        except json.JSONDecodeError:
+             raise HTTPException(status_code=422, detail="Invalid JSON format")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Unprocessable Entity: {str(e)}")
+
     mapping = pin_mapping.get(data.pin_num)
     if not mapping or mapping not in line_requests:
         raise HTTPException(status_code=404, detail="Pin not active")

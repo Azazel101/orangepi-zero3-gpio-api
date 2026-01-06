@@ -28,6 +28,10 @@ class PinState(BaseModel):
     pin_num: int
     state: int  # 0 or 1
 
+class WifiConnect(BaseModel):
+    ssid: str
+    password: str
+
 # Background task info
 interrupt_task = None
 event_queue = asyncio.Queue()
@@ -627,6 +631,118 @@ async def ota_update(force: bool = False):
         
         return {"status": "initiated", "message": "Safe update started. The API will restart momentarily. Check logs for result."}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Network Management Endpoints ---
+
+@app.get("/network/status")
+async def network_status():
+    """Get current network status (IP, SSID, Signal)"""
+    try:
+        # Get active connection
+        # Output format: NAME:UUID:TYPE:DEVICE:ACTIVE
+        active = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,DEVICE,TYPE,ACTIVE", "c", "show", "--active"],
+            capture_output=True, text=True
+        )
+        
+        # Get detailed signal info for active wifi
+        # nmcli -t -f SSID,SIGNAL dev wifi
+        
+        status = {
+            "ip": get_ip_address(),
+            "active_connection": None,
+            "device": None,
+            "signal_percent": 0
+        }
+
+        if active.returncode == 0 and active.stdout.strip():
+            for line in active.stdout.strip().split('\n'):
+                # parsing like: Preflight-Wifi:wlan0:802-11-wireless:yes
+                parts = line.split(':')
+                if len(parts) >= 4 and parts[2] == '802-11-wireless':
+                    status["active_connection"] = parts[0]
+                    status["device"] = parts[1]
+                    
+                    # Get signal for this SSID
+                    sig_cmd = subprocess.run(
+                         ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi"],
+                         capture_output=True, text=True
+                    )
+                    if sig_cmd.stdout:
+                         for sig_line in sig_cmd.stdout.split('\n'):
+                             if sig_line.startswith(parts[0] + ":"):
+                                 try:
+                                     status["signal_percent"] = int(sig_line.split(":")[1])
+                                 except: pass
+                                 break
+                    break
+        
+        return status
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/network/scan")
+async def network_scan():
+    """Scan for available Wi-Fi networks"""
+    try:
+        # Rescan first
+        subprocess.run(["nmcli", "dev", "wifi", "rescan"], capture_output=True)
+        
+        # Get list
+        # SSID,SIGNAL,SECURITY
+        cmd = subprocess.run(
+            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,BARS", "dev", "wifi", "list"],
+            capture_output=True, text=True
+        )
+        
+        networks = []
+        seen_ssids = set()
+        
+        if cmd.returncode == 0:
+            for line in cmd.stdout.split('\n'):
+                if not line: continue
+                # nmcli escapes colons with backslashes in SSID, handling that strictly is hard with just split.
+                # Assuming simple SSIDs for now or last fields.
+                # Format: SSID:SIGNAL:SECURITY:BARS
+                
+                parts = line.split(':')
+                if len(parts) >= 3:
+                     # Join all parts except last 3 as SSID (in case SSID contains colon)
+                     ssid = ":".join(parts[:-3])
+                     if not ssid: continue # hidden SSID
+                     
+                     if ssid not in seen_ssids:
+                         networks.append({
+                             "ssid": ssid,
+                             "signal": int(parts[-3]),
+                             "security": parts[-2],
+                             "bars": parts[-1]
+                         })
+                         seen_ssids.add(ssid)
+        
+        return {"networks": sorted(networks, key=lambda x: x['signal'], reverse=True)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/network/connect")
+async def network_connect(data: WifiConnect):
+    """Connect to a Wi-Fi network"""
+    # This is a blocking operation and might take time.
+    try:
+        # nmcli dev wifi connect <SSID> password <PASSWORD>
+        result = subprocess.run(
+            ["nmcli", "dev", "wifi", "connect", data.ssid, "password", data.password],
+            capture_output=True, text=True
+        )
+        
+        if result.returncode == 0:
+            return {"status": "success", "message": f"Connected to {data.ssid}", "details": result.stdout}
+        else:
+            return {"status": "error", "message": "Failed to connect", "details": result.stderr}
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

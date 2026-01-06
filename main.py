@@ -32,6 +32,12 @@ class WifiConnect(BaseModel):
     ssid: str
     password: str
 
+class EthernetConfig(BaseModel):
+    method: str  # "auto" (DHCP) or "manual" (Static)
+    ip: Optional[str] = None
+    gateway: Optional[str] = None
+    dns: Optional[str] = None
+
 # Background task info
 interrupt_task = None
 event_queue = asyncio.Queue()
@@ -745,6 +751,78 @@ async def network_connect(data: WifiConnect):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/network/ethernet")
+async def configure_ethernet(data: EthernetConfig):
+    """Configure Ethernet (DHCP or Static IP)"""
+    try:
+        # Identify Ethernet Interface (usually eth0 or end0 on OrangePi)
+        # We find the device with type 'ethernet'
+        dev_cmd = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE", "dev"],
+            capture_output=True, text=True
+        )
+        eth_dev = None
+        if dev_cmd.stdout:
+            for line in dev_cmd.stdout.split('\n'):
+                if ":ethernet" in line:
+                    eth_dev = line.split(':')[0]
+                    break
+        
+        if not eth_dev:
+             return {"status": "error", "message": "No Ethernet device found"}
+
+        # Connection Name usually 'Wired connection 1' or similar.
+        # We will create/modify a connection named 'eth-config' for consistency
+        con_name = "eth-config"
+        
+        # Check if connection exists
+        check_con = subprocess.run(
+            ["nmcli", "con", "show", con_name],
+            capture_output=True
+        )
+        
+        cmds = []
+        if check_con.returncode != 0:
+            # Create new connection
+            cmds.append(["nmcli", "con", "add", "con-name", con_name, "ifname", eth_dev, "type", "ethernet"])
+        
+        # Configure Method
+        if data.method == "auto":
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.method", "auto"])
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.addresses", ""])
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.gateway", ""])
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.dns", ""])
+        elif data.method == "manual":
+             if not data.ip or not data.gateway:
+                 raise HTTPException(status_code=400, detail="IP and Gateway required for manual mode")
+             
+             # IP Format: 192.168.1.50/24
+             ip_cidr = data.ip if "/" in data.ip else f"{data.ip}/24"
+             
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.method", "manual"])
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.addresses", ip_cidr])
+             cmds.append(["nmcli", "con", "mod", con_name, "ipv4.gateway", data.gateway])
+             if data.dns:
+                 cmds.append(["nmcli", "con", "mod", con_name, "ipv4.dns", data.dns])
+        
+        # Apply changes
+        for cmd in cmds:
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode != 0:
+                return {"status": "error", "message": f"Command failed: {' '.join(cmd)}", "details": r.stderr}
+
+        # Bring Up Connection
+        up_res = subprocess.run(["nmcli", "con", "up", con_name], capture_output=True, text=True)
+        
+        if up_res.returncode == 0:
+             return {"status": "success", "message": f"Ethernet configured ({data.method})", "details": up_res.stdout}
+        else:
+             return {"status": "error", "message": "Failed to activate connection", "details": up_res.stderr}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

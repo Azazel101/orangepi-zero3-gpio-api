@@ -72,6 +72,7 @@ Use these endpoints to download pre-configured XML templates for Loxone Config:
 - **Network Status**: `GET /network/status`
 - **Scan Networks**: `GET /network/scan`
 - **Connect Wi-Fi**: `POST /network/connect` (Body: `{"ssid": "MyWiFi", "password": "password"}`)
+- **Set Ethernet**: `POST /network/ethernet` (Body: `{"method": "manual", "ip": "192.168.1.50/24", "gateway": "192.168.1.1", "dns": "8.8.8.8"}` or `{"method": "auto"}`)
 
 ### 2. Status for Parsing
 Loxone can poll the plain-text status endpoint which is optimized for "Command Recognition":

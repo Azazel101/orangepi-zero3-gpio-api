@@ -603,7 +603,7 @@ async def check_update():
 
 @app.post("/update/ota")
 async def ota_update(force: bool = False):
-    """Trigger OTA update from GitHub"""
+    """Trigger OTA update via safe shell script"""
     try:
         # First check if update is needed (unless forced)
         if not force:
@@ -613,23 +613,19 @@ async def ota_update(force: bool = False):
              if local == remote:
                  return {"status": "skipped", "message": "Already up to date"}
 
-        # Run git pull
-        result = subprocess.run(
-            ["git", "pull", "origin", "main"],
+        # Verification check: Ensure script exists
+        if not os.path.exists("/root/opi_gpio_app/update_safe.sh"):
+             return {"status": "error", "message": "Safety script missing. Cannot update safely."}
+
+        # Run the safe update script in non-blocking way (fire and forget)
+        # We use start_new_session to detach prompts/signals so it survives restart
+        subprocess.Popen(
+            ["/bin/bash", "/root/opi_gpio_app/update_safe.sh"],
             cwd="/root/opi_gpio_app",
-            capture_output=True,
-            text=True
+            start_new_session=True
         )
         
-        if result.returncode == 0:
-            log_msg = f"OTA Update Success: {result.stdout}"
-            with open(LOG_FILE, "a") as f:
-                f.write(f"INFO: {log_msg}\n")
-            
-            subprocess.Popen("sleep 1 && systemctl restart opi_gpio.service", shell=True)
-            return {"status": "success", "message": "Update successful. Restarting service...", "git_output": result.stdout}
-        else:
-             return {"status": "error", "message": "Git pull failed", "git_output": result.stderr}
+        return {"status": "initiated", "message": "Safe update started. The API will restart momentarily. Check logs for result."}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

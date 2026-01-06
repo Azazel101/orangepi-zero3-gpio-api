@@ -671,7 +671,8 @@ async def network_status():
                 conn_name = parts[3] if len(parts) > 3 else None
 
                 # Normalize states like "connected (externally)" or "unmanaged"
-                is_connected = "connected" in state.lower()
+                # Use startswith to avoid matching "disconnected"
+                is_connected = state.lower().startswith("connected")
                 
                 if dev_type == "wifi":
                     status["wifi"]["device"] = device

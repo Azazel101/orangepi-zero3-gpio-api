@@ -646,17 +646,21 @@ async def ota_update(force: bool = False):
 async def network_status():
     """Get comprehensive network status for both WiFi and Ethernet"""
     try:
+        # Force English output for nmcli
+        env = os.environ.copy()
+        env["LANG"] = "C"
+        
         # Get device status
         # Format: DEVICE:TYPE:STATE:CONNECTION
         dev_cmd = subprocess.run(
             ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"],
-            capture_output=True, text=True
+            capture_output=True, text=True, env=env
         )
         
         status = {
             "main_ip": get_ip_address(),
-            "wifi": {"active": False, "ssid": None, "device": None, "signal_percent": 0},
-            "ethernet": {"active": False, "connection": None, "device": None}
+            "wifi": {"active": False, "ssid": None, "device": None, "signal_percent": 0, "state": "unknown"},
+            "ethernet": {"active": False, "connection": None, "device": None, "state": "unknown"}
         }
 
         if dev_cmd.returncode == 0:
@@ -666,28 +670,36 @@ async def network_status():
                 device, dev_type, state = parts[0], parts[1], parts[2]
                 conn_name = parts[3] if len(parts) > 3 else None
 
-                if dev_type == "wifi" and state == "connected":
-                    status["wifi"]["active"] = True
-                    status["wifi"]["ssid"] = conn_name
-                    status["wifi"]["device"] = device
-                    
-                    # Get signal
-                    sig_cmd = subprocess.run(
-                         ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi"],
-                         capture_output=True, text=True
-                    )
-                    if sig_cmd.stdout:
-                         for sig_line in sig_cmd.stdout.split('\n'):
-                             if sig_line.startswith(conn_name + ":"):
-                                 try:
-                                     status["wifi"]["signal_percent"] = int(sig_line.split(":")[1])
-                                 except: pass
-                                 break
+                # Normalize states like "connected (externally)" or "unmanaged"
+                is_connected = "connected" in state.lower()
                 
-                elif dev_type == "ethernet" and state == "connected":
-                    status["ethernet"]["active"] = True
-                    status["ethernet"]["connection"] = conn_name
+                if dev_type == "wifi":
+                    status["wifi"]["device"] = device
+                    status["wifi"]["state"] = state
+                    if is_connected:
+                        status["wifi"]["active"] = True
+                        status["wifi"]["ssid"] = conn_name
+                        
+                        # Get signal
+                        sig_cmd = subprocess.run(
+                             ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi"],
+                             capture_output=True, text=True, env=env
+                        )
+                        if sig_cmd.stdout:
+                             for sig_line in sig_cmd.stdout.split('\n'):
+                                 if sig_line.startswith(str(conn_name) + ":"):
+                                     try:
+                                         status["wifi"]["signal_percent"] = int(sig_line.split(":")[1])
+                                     except: pass
+                                     break
+                
+                elif dev_type == "ethernet":
                     status["ethernet"]["device"] = device
+                    status["ethernet"]["state"] = state
+                    if is_connected or state == "unmanaged":
+                        # If unmanaged but we have a main_ip, it might be the ethernet
+                        status["ethernet"]["active"] = True
+                        status["ethernet"]["connection"] = conn_name if conn_name else "System Managed"
 
         return status
     except Exception as e:

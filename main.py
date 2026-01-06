@@ -644,47 +644,51 @@ async def ota_update(force: bool = False):
 
 @app.get("/network/status")
 async def network_status():
-    """Get current network status (IP, SSID, Signal)"""
+    """Get comprehensive network status for both WiFi and Ethernet"""
     try:
-        # Get active connection
-        # Output format: NAME:UUID:TYPE:DEVICE:ACTIVE
-        active = subprocess.run(
-            ["nmcli", "-t", "-f", "NAME,DEVICE,TYPE,ACTIVE", "c", "show", "--active"],
+        # Get device status
+        # Format: DEVICE:TYPE:STATE:CONNECTION
+        dev_cmd = subprocess.run(
+            ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"],
             capture_output=True, text=True
         )
         
-        # Get detailed signal info for active wifi
-        # nmcli -t -f SSID,SIGNAL dev wifi
-        
         status = {
-            "ip": get_ip_address(),
-            "active_connection": None,
-            "device": None,
-            "signal_percent": 0
+            "main_ip": get_ip_address(),
+            "wifi": {"active": False, "ssid": None, "device": None, "signal_percent": 0},
+            "ethernet": {"active": False, "connection": None, "device": None}
         }
 
-        if active.returncode == 0 and active.stdout.strip():
-            for line in active.stdout.strip().split('\n'):
-                # parsing like: Preflight-Wifi:wlan0:802-11-wireless:yes
+        if dev_cmd.returncode == 0:
+            for line in dev_cmd.stdout.strip().split('\n'):
                 parts = line.split(':')
-                if len(parts) >= 4 and parts[2] == '802-11-wireless':
-                    status["active_connection"] = parts[0]
-                    status["device"] = parts[1]
+                if len(parts) < 3: continue
+                device, dev_type, state = parts[0], parts[1], parts[2]
+                conn_name = parts[3] if len(parts) > 3 else None
+
+                if dev_type == "wifi" and state == "connected":
+                    status["wifi"]["active"] = True
+                    status["wifi"]["ssid"] = conn_name
+                    status["wifi"]["device"] = device
                     
-                    # Get signal for this SSID
+                    # Get signal
                     sig_cmd = subprocess.run(
                          ["nmcli", "-t", "-f", "SSID,SIGNAL", "dev", "wifi"],
                          capture_output=True, text=True
                     )
                     if sig_cmd.stdout:
                          for sig_line in sig_cmd.stdout.split('\n'):
-                             if sig_line.startswith(parts[0] + ":"):
+                             if sig_line.startswith(conn_name + ":"):
                                  try:
-                                     status["signal_percent"] = int(sig_line.split(":")[1])
+                                     status["wifi"]["signal_percent"] = int(sig_line.split(":")[1])
                                  except: pass
                                  break
-                    break
-        
+                
+                elif dev_type == "ethernet" and state == "connected":
+                    status["ethernet"]["active"] = True
+                    status["ethernet"]["connection"] = conn_name
+                    status["ethernet"]["device"] = device
+
         return status
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))

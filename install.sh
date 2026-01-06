@@ -14,7 +14,7 @@ echo "--- Installing Orange Pi GPIO API ---"
 # 1. Install system dependencies
 echo "Installing system dependencies..."
 apt update
-apt install -y python3-venv libgpiod-dev gpiod git
+apt install -y python3-venv libgpiod-dev gpiod git network-manager
 
 # 2. Setup Virtual Environment
 echo "Setting up Python virtual environment..."
@@ -39,7 +39,16 @@ else
     echo "Error: $SERVICE_FILE not found in $APP_DIR"
 fi
 
-# 5. Initialize Git for OTA (if not already a git repo)
+# 5. Set permissions for scripts
+echo "Setting script permissions..."
+chmod +x "$APP_DIR"/*.sh
+
+# 6. Ensure NetworkManager is running
+echo "Checking NetworkManager service..."
+systemctl enable NetworkManager
+systemctl restart NetworkManager
+
+# 7. Initialize Git for OTA (if not already a git repo)
 echo "Initializing Git for OTA updates..."
 if [ ! -d "$APP_DIR/.git" ]; then
     cd "$APP_DIR"

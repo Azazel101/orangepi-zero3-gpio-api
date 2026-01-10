@@ -169,5 +169,28 @@
     // Update every 10 seconds
     setInterval(updateCharts, 10000);
     updateCharts();
+
+    // Adapt charts to theme changes
+    window.addEventListener('themeChanged', (e) => {
+        const isDark = e.detail.theme === 'dark';
+        const gridColor = isDark ? '#333' : '#eee';
+        const textColor = isDark ? '#aaa' : '#666';
+
+        [tempChart, loadChart].forEach(chart => {
+            if (chart) {
+                chart.options.scales.y.grid.color = gridColor;
+                chart.options.scales.y.ticks.color = textColor;
+                chart.options.scales.x.ticks.color = textColor;
+                chart.update();
+            }
+        });
+    });
+
+    // Check theme on initial load for charts
+    if (document.body.classList.contains('dark-mode')) {
+        setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: 'dark' } }));
+        }, 100);
+    }
 </script>
 {% endblock %}

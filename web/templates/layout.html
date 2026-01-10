@@ -21,10 +21,26 @@
             <a href="/network" class="{{ 'active' if request.path == '/network' }}">Network</a>
             <a href="/system" class="{{ 'active' if request.path == '/system' }}">System</a>
         </nav>
-        <div class="user-status" id="connection-status">
-            <span class="badge badge-success"><i class="fas fa-check-circle"></i> Connected</span>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <button id="theme-toggle" title="Toggle Dark/Light Mode">
+                <i class="fas fa-moon"></i>
+            </button>
+            <div class="user-status" id="connection-status">
+                <span class="badge badge-success"><i class="fas fa-check-circle"></i> Connected</span>
+            </div>
         </div>
     </header>
+
+    <script>
+        // Init theme before body renders to avoid flash
+        (function () {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                document.querySelector('#theme-toggle i')?.classList.replace('fa-moon', 'fa-sun');
+            }
+        })();
+    </script>
 
     <main>
         {% block content %}{% endblock %}

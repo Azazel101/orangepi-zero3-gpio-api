@@ -10,6 +10,30 @@
     --loxone-error: #d93025;
     --loxone-error-bg: #fce8e6;
     --transition: all 0.3s ease;
+
+    /* Theme Variables - Default Light */
+    --bg-body: var(--loxone-light-grey);
+    --bg-card: var(--loxone-white);
+    --bg-stat: var(--loxone-light-grey);
+    --bg-header: var(--loxone-white);
+    --text-main: var(--loxone-dark-grey);
+    --text-dim: #888;
+    --border-color: #eee;
+    --input-bg: var(--loxone-white);
+    --input-border: #ddd;
+}
+
+body.dark-mode {
+    --bg-body: #121212;
+    --bg-card: #1e1e1e;
+    --bg-stat: #2a2a2a;
+    --bg-header: #1e1e1e;
+    --text-main: #e0e0e0;
+    --text-dim: #aaa;
+    --border-color: #333;
+    --loxone-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --input-bg: #2a2a2a;
+    --input-border: #444;
 }
 
 * {
@@ -20,13 +44,14 @@
 
 body {
     font-family: 'Lexend', sans-serif;
-    background-color: var(--loxone-light-grey);
-    color: var(--loxone-dark-grey);
+    background-color: var(--bg-body);
+    color: var(--text-main);
     line-height: 1.6;
+    transition: background-color 0.3s, color 0.3s;
 }
 
 header {
-    background-color: var(--loxone-white);
+    background-color: var(--bg-header);
     padding: 1.5rem 2rem;
     box-shadow: var(--loxone-shadow);
     display: flex;
@@ -54,7 +79,7 @@ header {
 
 .nav-links a {
     text-decoration: none;
-    color: var(--loxone-dark-grey);
+    color: var(--text-main);
     font-weight: 500;
     transition: var(--transition);
 }
@@ -71,7 +96,7 @@ main {
 }
 
 .card {
-    background: var(--loxone-white);
+    background: var(--bg-card);
     border-radius: var(--loxone-border-radius);
     padding: 2rem;
     box-shadow: var(--loxone-shadow);
@@ -85,7 +110,7 @@ main {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    border-bottom: 2px solid var(--loxone-light-grey);
+    border-bottom: 2px solid var(--border-color);
     padding-bottom: 0.5rem;
 }
 
@@ -97,7 +122,7 @@ main {
 
 .stat-box {
     padding: 1rem;
-    background: var(--loxone-light-grey);
+    background: var(--bg-stat);
     border-radius: 8px;
     display: flex;
     flex-direction: column;
@@ -178,6 +203,27 @@ button.danger:hover {
     filter: brightness(0.8);
 }
 
+#theme-toggle {
+    background: transparent;
+    color: var(--text-main);
+    border: none;
+    padding: 0.5rem;
+    font-size: 1.25rem;
+    cursor: pointer;
+    margin-left: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+}
+
+#theme-toggle:hover {
+    background: var(--bg-stat);
+    transform: none;
+}
+
 /* GPIO Specific */
 .pin-grid {
     display: grid;
@@ -186,7 +232,8 @@ button.danger:hover {
 }
 
 .pin-card {
-    border: 1px solid var(--loxone-light-grey);
+    border: 1px solid var(--border-color);
+    background: var(--bg-stat);
     border-radius: 8px;
     padding: 1rem;
     text-align: center;
@@ -226,7 +273,9 @@ input[type="password"],
 select {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ddd;
+    background-color: var(--input-bg);
+    color: var(--text-main);
+    border: 1px solid var(--input-border);
     border-radius: 8px;
     font-family: inherit;
 }
@@ -295,7 +344,7 @@ select {
     }
 
     .nav-links a {
-        background: var(--loxone-light-grey);
+        background: var(--bg-stat);
         padding: 0.5rem;
         border-radius: 8px;
     }

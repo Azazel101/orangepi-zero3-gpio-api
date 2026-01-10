@@ -654,7 +654,15 @@ async def check_update():
             "remote_hash": remote_hash
         }
     except Exception as e:
-        return {"error": str(e), "update_available": False}
+        local_hash = "Unknown"
+        try:
+            local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
+        except: pass
+        return {
+            "error": str(e), 
+            "update_available": False,
+            "local_hash": local_hash
+        }
 
 @app.post("/update/ota")
 async def ota_update(force: bool = False):

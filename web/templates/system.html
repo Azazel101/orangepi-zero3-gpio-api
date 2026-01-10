@@ -10,9 +10,13 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <p><strong>Current Version (Hash):</strong> <code
-                    style="background: var(--bg-stat); color: var(--text-main); padding: 0.2rem 0.4rem; border-radius: 4px;">{{ update_info.local_hash[:8] }}</code>
+                    style="background: var(--bg-stat); color: var(--text-main); padding: 0.2rem 0.4rem; border-radius: 4px;">{{ (update_info.local_hash or 'Unknown')[:8] }}</code>
             </p>
-            {% if update_info.update_available %}
+            {% if update_info.error %}
+            <p style="color: var(--loxone-error); font-size: 0.85rem; margin-top: 0.5rem;">
+                <i class="fas fa-exclamation-triangle"></i> Update check failed (Offline?)
+            </p>
+            {% elif update_info.update_available %}
             <p style="color: var(--loxone-green); font-weight: 600; margin-top: 0.5rem;">
                 <i class="fas fa-info-circle"></i> A new update is available!
             </p>

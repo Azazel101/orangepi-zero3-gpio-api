@@ -14,6 +14,8 @@ from datetime import timedelta
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 import subprocess
+import time
+from collections import deque
 
 # Dictionary to hold the requested GPIO line requests
 # Key: (chip_path, line_offset), Value: gpiod.LineRequest
@@ -40,7 +42,42 @@ class EthernetConfig(BaseModel):
 
 # Background task info
 interrupt_task = None
+stats_task = None
 event_queue = asyncio.Queue()
+# Circular buffer for stats: [(timestamp, cpu_temp, load_1m), ...]
+# 360 points at 10s interval = 1 hour of history
+stats_history = deque(maxlen=360)
+
+async def monitor_stats():
+    """Background task to collect system stats every 10 seconds."""
+    print("Stats monitor: Task started")
+    while True:
+        try:
+            # CPU temperature
+            cpu_temp = 0.0
+            if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
+                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                    cpu_temp = int(f.read().strip()) / 1000.0
+            
+            # Load Average
+            load_1m = 0.0
+            if os.path.exists("/proc/loadavg"):
+                with open("/proc/loadavg", "r") as f:
+                    load_1m = float(f.read().split()[0])
+            
+            # Timestamp (Local time as ISO string for frontend)
+            current_time = time.strftime("%H:%M:%S")
+            
+            stats_history.append({
+                "time": current_time,
+                "temp": round(cpu_temp, 1),
+                "load": round(load_1m, 2)
+            })
+            
+        except Exception as e:
+            print(f"Stats monitor error: {e}")
+            
+        await asyncio.sleep(10)
 
 async def monitor_interrupts():
     """Background task to poll for GPIO edge events."""
@@ -138,19 +175,23 @@ def init_gpios():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global interrupt_task
+    global interrupt_task, stats_task
     # Startup
     init_gpios()
     interrupt_task = asyncio.create_task(monitor_interrupts())
+    stats_task = asyncio.create_task(monitor_stats())
     yield
     # Shutdown
-    print("Cleaning up GPIOs...")
+    print("Cleaning up system...")
     if interrupt_task:
         interrupt_task.cancel()
-        try:
-            await interrupt_task
-        except asyncio.CancelledError:
-            pass
+    if stats_task:
+        stats_task.cancel()
+    
+    try:
+        await asyncio.gather(interrupt_task, stats_task, return_exceptions=True)
+    except asyncio.CancelledError:
+        pass
     for req in line_requests.values():
         try:
             req.release()
@@ -294,7 +335,6 @@ async def health():
             "cpu_temp_c": cpu_temp,
             "load_avg": sys_info["load_avg"],
             "ram": sys_info["ram"]
-          #  "disk": sys_info["disk"]
         },
         "gpio_status": {
             "initialized": len(line_requests) > 0,
@@ -302,6 +342,11 @@ async def health():
             "interrupt_monitor_running": interrupt_task is not None and not interrupt_task.done()
         }
     }
+
+@app.get("/stats/history")
+async def get_stats_history():
+    """Return the collected system stats history."""
+    return {"history": list(stats_history)}
 
 @app.get("/pins/status")
 async def get_status():

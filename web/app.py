@@ -82,6 +82,10 @@ def config_ethernet():
 def get_health():
     return jsonify(api_get("/health"))
 
+@app.route('/api/stats/history')
+def get_stats_history():
+    return jsonify(api_get("/stats/history"))
+
 @app.route('/api/update/ota', methods=['POST'])
 def trigger_update():
     return jsonify(api_post("/update/ota"))

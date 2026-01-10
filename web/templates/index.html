@@ -58,4 +58,110 @@
         </div>
     </div>
 </div>
+
+<div class="card animate-fade" style="margin-top: 2rem;">
+    <div class="card-title">
+        <i class="fas fa-microchip"></i>
+        Live Metrics (Last 60 min)
+    </div>
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+        <div style="height: 250px;">
+            <canvas id="tempChart"></canvas>
+        </div>
+        <div style="height: 250px;">
+            <canvas id="loadChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let tempChart, loadChart;
+
+    function initCharts(history) {
+        const labels = history.map(d => d.time);
+        const temps = history.map(d => d.temp);
+        const loads = history.map(d => d.load);
+
+        const ctxTemp = document.getElementById('tempChart').getContext('2d');
+        tempChart = new Chart(ctxTemp, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'CPU Temp (°C)',
+                    data: temps,
+                    borderColor: '#69C350',
+                    backgroundColor: 'rgba(105, 195, 80, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false, grid: { color: '#eee' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const ctxLoad = document.getElementById('loadChart').getContext('2d');
+        loadChart = new Chart(ctxLoad, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'CPU Load (1m)',
+                    data: loads,
+                    borderColor: '#3A4045',
+                    backgroundColor: 'rgba(58, 64, 69, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#eee' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    async function updateCharts() {
+        try {
+            const response = await fetch('/api/stats/history');
+            const data = await response.json();
+            const history = data.history;
+
+            if (history.length > 0) {
+                if (!tempChart) {
+                    initCharts(history);
+                } else {
+                    tempChart.data.labels = history.map(d => d.time);
+                    tempChart.data.datasets[0].data = history.map(d => d.temp);
+                    tempChart.update('none'); // Update without animation for performance
+
+                    loadChart.data.labels = history.map(d => d.time);
+                    loadChart.data.datasets[0].data = history.map(d => d.load);
+                    loadChart.update('none');
+                }
+            }
+        } catch (e) {
+            console.error("Chart update failed", e);
+        }
+    }
+
+    // Update every 10 seconds
+    setInterval(updateCharts, 10000);
+    updateCharts();
+</script>
 {% endblock %}

@@ -104,7 +104,10 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: { beginAtZero: false, grid: { color: '#eee' } },
-                    x: { grid: { display: false } }
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxTicksLimit: 6 }
+                    }
                 }
             }
         });
@@ -130,7 +133,10 @@
                 maintainAspectRatio: false,
                 scales: {
                     y: { beginAtZero: true, grid: { color: '#eee' } },
-                    x: { grid: { display: false } }
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxTicksLimit: 6 }
+                    }
                 }
             }
         });

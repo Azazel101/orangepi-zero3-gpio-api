@@ -42,7 +42,10 @@
             const response = await fetch(`/api/pins/toggle/${pinNum}`, { method: 'POST' });
             const result = await response.json();
             if (result.status === 'success') {
+                // Immediate local update for speed
                 updatePinUI(pinNum, result.new_state);
+                // Background full sync to ensure consistency
+                refreshPins();
             }
         } catch (e) {
             console.error("Toggle failed", e);

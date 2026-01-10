@@ -10,14 +10,14 @@
     <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
             <p><strong>Current Version (Hash):</strong> <code
-                    style="background: #eee; padding: 0.2rem 0.4rem; border-radius: 4px;">{{ update_info.local_hash[:8] }}</code>
+                    style="background: var(--bg-stat); color: var(--text-main); padding: 0.2rem 0.4rem; border-radius: 4px;">{{ update_info.local_hash[:8] }}</code>
             </p>
             {% if update_info.update_available %}
             <p style="color: var(--loxone-green); font-weight: 600; margin-top: 0.5rem;">
                 <i class="fas fa-info-circle"></i> A new update is available!
             </p>
             {% else %}
-            <p style="color: #888; margin-top: 0.5rem;">Your software is up to date.</p>
+            <p style="color: var(--text-dim); margin-top: 0.5rem;">Your software is up to date.</p>
             {% endif %}
         </div>
         <button onclick="triggerUpdate()" id="update-btn" {{ 'disabled' if not update_info.update_available }}>

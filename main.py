@@ -836,11 +836,28 @@ async def configure_ethernet(data: EthernetConfig):
              return {"status": "success", "message": f"Ethernet configured ({data.method})", "details": up_res.stdout}
         else:
              return {"status": "error", "message": "Failed to activate connection", "details": up_res.stderr}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/system/reboot")
+async def system_reboot():
+    """Reboot the Orange Pi"""
+    try:
+        # Use Popen to let the response send before reboot
+        subprocess.Popen(["reboot"])
+        return {"status": "success", "message": "Reboot sequence initiated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/system/shutdown")
+async def system_shutdown():
+    """Shutdown the Orange Pi"""
+    try:
+        # Use Popen to let the response send before shutdown
+        subprocess.Popen(["shutdown", "-h", "now"])
+        return {"status": "success", "message": "Shutdown sequence initiated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

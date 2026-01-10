@@ -1,0 +1,133 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-sync"></i>
+        OTA Software Update
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <p><strong>Current Version (Hash):</strong> <code
+                    style="background: #eee; padding: 0.2rem 0.4rem; border-radius: 4px;">{{ update_info.local_hash[:8] }}</code>
+            </p>
+            {% if update_info.update_available %}
+            <p style="color: var(--loxone-green); font-weight: 600; margin-top: 0.5rem;">
+                <i class="fas fa-info-circle"></i> A new update is available!
+            </p>
+            {% else %}
+            <p style="color: #888; margin-top: 0.5rem;">Your software is up to date.</p>
+            {% endif %}
+        </div>
+        <button onclick="triggerUpdate()" id="update-btn" {{ 'disabled' if not update_info.update_available }}>
+            Update Now
+        </button>
+    </div>
+</div>
+
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-power-off"></i>
+        Power Controls
+    </div>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <button onclick="systemControl('reboot')" class="secondary">
+            <i class="fas fa-redo"></i> Reboot System
+        </button>
+        <button onclick="systemControl('shutdown')" class="danger">
+            <i class="fas fa-power-off"></i> Shutdown
+        </button>
+    </div>
+    <p style="margin-top: 1rem; font-size: 0.85rem; opacity: 0.7;">
+        <i class="fas fa-exclamation-triangle"></i> Warning: Shutdown will require physical access to power-cycle the
+        board.
+    </p>
+</div>
+
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-file-code"></i>
+        Loxone Config Templates
+    </div>
+    <p style="margin-bottom: 1.5rem; opacity: 0.8;">Download XML templates for one-click import into Loxone Config.</p>
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="/loxone/download/inputs" style="text-decoration: none;">
+            <button class="secondary"><i class="fas fa-download"></i> Virtual Inputs</button>
+        </a>
+        <a href="/loxone/download/outputs" style="text-decoration: none;">
+            <button class="secondary"><i class="fas fa-download"></i> Virtual Outputs</button>
+        </a>
+        <a href="/loxone/download/stats" style="text-decoration: none;">
+            <button class="secondary"><i class="fas fa-download"></i> System Stats</button>
+        </a>
+    </div>
+</div>
+
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-file-alt"></i>
+        System Logs
+    </div>
+    <div id="logs-container"
+        style="background: #1e1e1e; color: #d4d4d4; padding: 1.5rem; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; height: 400px; overflow-y: scroll;">
+        Loading logs...
+    </div>
+    <div style="margin-top: 1rem;">
+        <button class="secondary" onclick="refreshLogs()">Refresh Logs</button>
+    </div>
+</div>
+
+<script>
+    async function triggerUpdate() {
+        if (!confirm("Are you sure you want to update? The system will restart.")) return;
+
+        const btn = document.getElementById('update-btn');
+        btn.disabled = true;
+        btn.innerText = "Updating...";
+
+        try {
+            const response = await fetch('/api/update/ota', { method: 'POST' });
+            const result = await response.json();
+            alert("Update initiated. The system will be back in about 60 seconds.");
+        } catch (e) {
+            alert("Update trigger failed.");
+            btn.disabled = false;
+            btn.innerText = "Update Now";
+        }
+    }
+
+    async function systemControl(type) {
+        const msg = type === 'reboot' ? "Are you sure you want to REBOOT the system?" : "Are you sure you want to SHUTDOWN the system?";
+        if (!confirm(msg)) return;
+
+        try {
+            const response = await fetch(`/api/system/${type}`, { method: 'POST' });
+            const result = await response.json();
+            alert(result.message + ". The connection will be lost.");
+        } catch (e) {
+            alert("Operation failed. The device might be already restarting.");
+        }
+    }
+
+    async function refreshLogs() {
+        const container = document.getElementById('logs-container');
+        container.innerText = "Fetching latest logs...";
+        try {
+            const response = await fetch("/api/logs");
+            const data = await response.json();
+            if (data.logs) {
+                container.innerText = data.logs.join("");
+            } else {
+                container.innerText = JSON.stringify(data, null, 2);
+            }
+            container.scrollTop = container.scrollHeight;
+        } catch (e) {
+            container.innerText = "Error loading logs.";
+        }
+    }
+
+    // Initial load
+    refreshLogs();
+</script>
+{% endblock %}

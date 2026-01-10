@@ -1,0 +1,61 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-chart-line"></i>
+        System Overview
+    </div>
+    <div class="grid">
+        <div class="stat-box">
+            <span class="stat-label">CPU Temperature</span>
+            <span class="stat-value">{{ "%.1f"|format(health.system_stats.cpu_temp_c) }}°C</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">Uptime</span>
+            <span class="stat-value">{{ health.board_info.uptime }}</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">RAM Usage</span>
+            <span class="stat-value">{{ health.system_stats.ram.percent }}%</span>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">GPIO Config</span>
+            <span class="stat-value">
+                <span title="Inputs" style="font-size: 1.1rem; color: #555;">{{ io_counts.input }} IN</span>
+                <span style="color: #ccc; margin: 0 0.5rem;">|</span>
+                <span title="Outputs" style="font-size: 1.1rem; color: var(--loxone-green);">{{ io_counts.output }}
+                    OUT</span>
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="grid animate-fade" style="margin-top: 2rem;">
+    <div class="card">
+        <div class="card-title">
+            <i class="fas fa-network-wired"></i>
+            Active Network
+        </div>
+        <p><strong>Device:</strong> {{ net_status.ethernet.device if net_status.ethernet.active else
+            net_status.wifi.device or 'None' }}</p>
+        <p><strong>IP Address:</strong> <span style="color: var(--loxone-green); font-weight: 600;">{{
+                net_status.main_ip }}</span></p>
+        <div style="margin-top: 1rem;">
+            <a href="/network" class="secondary-btn"><button class="secondary">Manage Network</button></a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">
+            <i class="fas fa-shield-alt"></i>
+            System Status
+        </div>
+        <p><strong>OS:</strong> {{ health.board_info.os }}</p>
+        <p><strong>Kernel:</strong> {{ health.board_info.kernel }}</p>
+        <div style="margin-top: 1rem;">
+            <a href="/system" class="secondary-btn"><button class="secondary">System Info</button></a>
+        </div>
+    </div>
+</div>
+{% endblock %}

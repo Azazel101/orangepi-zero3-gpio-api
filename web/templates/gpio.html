@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-toggle-on"></i>
+        GPIO Pin Control
+    </div>
+    <div class="pin-grid">
+        {% for pin in pins %}
+        <div class="pin-card" id="pin-card-{{ pin.num }}" style="{{ 'opacity: 0.5;' if not pin.active else '' }}">
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">Pin {{ pin.num }}</div>
+            <div style="font-size: 0.75rem; color: #888; margin-bottom: 1rem;">
+                {{ pin.name }} ({{ pin.direction }})
+                {% if not pin.active %}<br><span style="color: var(--loxone-error);">Inactive</span>{% endif %}
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                <span class="pin-status-icon {{ 'status-on' if pin.current_state == 1 else 'status-off' }}"
+                    id="icon-{{ pin.num }}"></span>
+                <span id="state-text-{{ pin.num }}">
+                    {% if pin.current_state == 1 %}HIGH{% elif pin.current_state == 0 %}LOW{% else %}ERR{% endif %}
+                </span>
+            </div>
+
+            {% if pin.direction == 'output' and pin.active %}
+            <button onclick="togglePin({{ pin.num }})" class="secondary"
+                style="width: 100%; padding: 0.5rem;">Toggle</button>
+            {% elif pin.direction == 'input' %}
+            <button disabled style="width: 100%; padding: 0.5rem; opacity: 0.5;">Input Only</button>
+            {% else %}
+            <button disabled style="width: 100%; padding: 0.5rem; opacity: 0.5;">Unavailable</button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    async function togglePin(pinNum) {
+        try {
+            const response = await fetch(`/api/pins/toggle/${pinNum}`, { method: 'POST' });
+            const result = await response.json();
+            if (result.status === 'success') {
+                const icon = document.getElementById(`icon-${pinNum}`);
+                const text = document.getElementById(`state-text-${pinNum}`);
+                if (result.new_state === 1) {
+                    icon.className = 'pin-status-icon status-on';
+                    text.innerText = 'HIGH';
+                } else {
+                    icon.className = 'pin-status-icon status-off';
+                    text.innerText = 'LOW';
+                }
+            }
+        } catch (e) {
+            console.error("Toggle failed", e);
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orange Pi Setup | Loxone Integration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <a href="/" class="logo">
+            <i class="fas fa-microchip"></i>
+            OPI GPIO
+        </a>
+        <nav class="nav-links">
+            <a href="/" class="{{ 'active' if request.path == '/' }}">Dashboard</a>
+            <a href="/gpio" class="{{ 'active' if request.path == '/gpio' }}">GPIO Control</a>
+            <a href="/network" class="{{ 'active' if request.path == '/network' }}">Network</a>
+            <a href="/system" class="{{ 'active' if request.path == '/system' }}">System</a>
+        </nav>
+        <div class="user-status" id="connection-status">
+            <span class="badge badge-success"><i class="fas fa-check-circle"></i> Connected</span>
+        </div>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer style="text-align: center; padding: 2rem; opacity: 0.5; font-size: 0.8rem;">
+        &copy; 2026 Orange Pi Zero3 GPIO API | RS Soft
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

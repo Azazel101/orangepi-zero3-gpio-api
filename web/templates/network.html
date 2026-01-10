@@ -1,0 +1,146 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-wifi"></i>
+        Wi-Fi Configuration
+    </div>
+
+    <div id="scan-container">
+        <button onclick="scanWifi()" id="scan-btn">
+            <i class="fas fa-search"></i> Scan for Networks
+        </button>
+        <div id="wifi-list" style="margin-top: 1.5rem;">
+            <!-- Wi-Fi networks will appear here -->
+        </div>
+    </div>
+
+    <!-- Connect Modal Logic (Simple inline for now) -->
+    <div id="connect-form"
+        style="display: none; margin-top: 1.5rem; padding: 1.5rem; background: var(--loxone-light-grey); border-radius: 8px;">
+        <h3 id="connect-title">Connect to </h3>
+        <div class="form-group" style="margin-top: 1rem;">
+            <label>Password</label>
+            <input type="password" id="wifi-pass" placeholder="Enter password">
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <button onclick="connectWifi()">Connect</button>
+            <button class="secondary" onclick="hideConnect()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-ethernet"></i>
+        Ethernet Settings
+    </div>
+    <div class="form-group">
+        <label>IP Configuration</label>
+        <select id="eth-method" onchange="toggleEthFields()">
+            <option value="auto">Automatic (DHCP)</option>
+            <option value="manual">Manual (Static IP)</option>
+        </select>
+    </div>
+
+    <div id="eth-manual-fields" style="display: none;">
+        <div class="form-group">
+            <label>Static IP (e.g., 192.168.1.50/24)</label>
+            <input type="text" id="eth-ip" placeholder="192.168.1.50/24">
+        </div>
+        <div class="form-group">
+            <label>Gateway</label>
+            <input type="text" id="eth-gw" placeholder="192.168.1.1">
+        </div>
+        <div class="form-group">
+            <label>DNS (Optional)</label>
+            <input type="text" id="eth-dns" placeholder="8.8.8.8">
+        </div>
+    </div>
+
+    <button onclick="saveEthernet()">Apply Ethernet Settings</button>
+</div>
+
+<script>
+    let selectedSsid = "";
+
+    async function scanWifi() {
+        const btn = document.getElementById('scan-btn');
+        const list = document.getElementById('wifi-list');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+
+        try {
+            const response = await fetch('/api/network/scan');
+            const data = await response.json();
+            list.innerHTML = "";
+
+            data.networks.forEach(net => {
+                const item = document.createElement('div');
+                item.className = 'animate-fade';
+                item.style = "display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid #eee;";
+                item.innerHTML = `
+                <div>
+                    <strong>${net.ssid}</strong> <br>
+                    <small>${net.security} | Signal: ${net.signal}%</small>
+                </div>
+                <button class="secondary" onclick="showConnect('${net.ssid}')">Connect</button>
+            `;
+                list.appendChild(item);
+            });
+        } catch (e) {
+            alert("Scan failed");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Scan for Networks';
+        }
+    }
+
+    function showConnect(ssid) {
+        selectedSsid = ssid;
+        document.getElementById('connect-title').innerText = `Connect to ${ssid}`;
+        document.getElementById('connect-form').style.display = 'block';
+        document.getElementById('scan-container').style.display = 'none';
+    }
+
+    function hideConnect() {
+        document.getElementById('connect-form').style.display = 'none';
+        document.getElementById('scan-container').style.display = 'block';
+    }
+
+    async function connectWifi() {
+        const pass = document.getElementById('wifi-pass').value;
+        const response = await fetch('/api/network/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ssid: selectedSsid, password: pass })
+        });
+        const result = await response.json();
+        alert(result.message);
+        if (result.status === 'success') location.reload();
+    }
+
+    function toggleEthFields() {
+        const method = document.getElementById('eth-method').value;
+        document.getElementById('eth-manual-fields').style.display = method === 'manual' ? 'block' : 'none';
+    }
+
+    async function saveEthernet() {
+        const data = {
+            method: document.getElementById('eth-method').value,
+            ip: document.getElementById('eth-ip').value,
+            gateway: document.getElementById('eth-gw').value,
+            dns: document.getElementById('eth-dns').value
+        };
+
+        const response = await fetch('/api/network/ethernet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        alert(result.message);
+    }
+</script>
+{% endblock %}

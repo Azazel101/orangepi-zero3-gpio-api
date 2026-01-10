@@ -18,7 +18,7 @@ opi_gpio_app/
 │   ├── app.py         # Dashboard Backend
 │   ├── templates/     # Loxone-style HTML
 │   └── static/        # CSS (Premium Styles) & JS (Real-time checks)
-├── install.sh         # Main API installer
+├── install_api.sh     # Main API installer
 ├── install_web.sh     # Web UI installer
 ├── update_safe.sh     # Secure OTA Update script
 └── TODO.md            # Future Roadmap
@@ -30,8 +30,8 @@ Run these commands on your Orange Pi as root:
 ### 1. Install Hardware API
 ```bash
 cd /root/opi_gpio_app
-chmod +x install.sh
-./install.sh
+chmod +x install_api.sh
+./install_api.sh
 ```
 
 ### 2. Install Web Dashboard

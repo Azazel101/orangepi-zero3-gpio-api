@@ -42,19 +42,45 @@
             const response = await fetch(`/api/pins/toggle/${pinNum}`, { method: 'POST' });
             const result = await response.json();
             if (result.status === 'success') {
-                const icon = document.getElementById(`icon-${pinNum}`);
-                const text = document.getElementById(`state-text-${pinNum}`);
-                if (result.new_state === 1) {
-                    icon.className = 'pin-status-icon status-on';
-                    text.innerText = 'HIGH';
-                } else {
-                    icon.className = 'pin-status-icon status-off';
-                    text.innerText = 'LOW';
-                }
+                updatePinUI(pinNum, result.new_state);
             }
         } catch (e) {
             console.error("Toggle failed", e);
         }
     }
+
+    function updatePinUI(pinNum, state) {
+        const icon = document.getElementById(`icon-${pinNum}`);
+        const text = document.getElementById(`state-text-${pinNum}`);
+        if (icon && text) {
+            if (state === 1) {
+                icon.className = 'pin-status-icon status-on';
+                text.innerText = 'HIGH';
+            } else if (state === 0) {
+                icon.className = 'pin-status-icon status-off';
+                text.innerText = 'LOW';
+            } else {
+                icon.className = 'pin-status-icon status-off';
+                text.innerText = 'ERR';
+            }
+        }
+    }
+
+    async function refreshPins() {
+        try {
+            const response = await fetch('/api/pins/status');
+            const pins = await response.json();
+            if (Array.isArray(pins)) {
+                pins.forEach(pin => {
+                    updatePinUI(pin.num, pin.current_state);
+                });
+            }
+        } catch (e) {
+            console.error("Refresh failed", e);
+        }
+    }
+
+    // Refresh every 2 seconds to see changes from API/Loxone
+    setInterval(refreshPins, 2000);
 </script>
 {% endblock %}

@@ -60,6 +60,10 @@ def system_page():
 def toggle_pin(pin_num):
     return jsonify(api_post(f"/pins/toggle/{pin_num}"))
 
+@app.route('/api/pins/status')
+def get_pins_status():
+    return jsonify(api_get("/pins/status"))
+
 @app.route('/api/network/scan')
 def scan_wifi():
     return jsonify(api_get("/network/scan"))

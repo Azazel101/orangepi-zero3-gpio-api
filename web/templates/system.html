@@ -31,15 +31,18 @@
 
     <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
         <p style="font-weight: 600; margin-bottom: 1rem;"><i class="fas fa-file-archive"></i> Manual ZIP Update</p>
-        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-            <input type="file" id="zip-file" accept=".zip" style="font-size: 0.9rem; color: var(--text-dim);">
-            <button onclick="uploadZip()" id="upload-btn" class="secondary">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1; margin-right: 1rem;">
+                <input type="file" id="zip-file" accept=".zip"
+                    style="font-size: 0.9rem; color: var(--text-dim); width: 100%;">
+                <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7;">
+                    Upload a repository ZIP (e.g., from GitHub).
+                </p>
+            </div>
+            <button onclick="uploadZip()" id="upload-btn">
                 <i class="fas fa-upload"></i> Upload & Update
             </button>
         </div>
-        <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7;">
-            Upload a repository ZIP (e.g., from GitHub) to manually update the system.
-        </p>
     </div>
 </div>
 

@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set password "paradox"
+set ip "192.168.1.29"
+
+# 1. SCP files
+spawn scp -o StrictHostKeyChecking=no main.py update_manual.sh root@$ip:/root/opi_gpio_app/
+expect "password:"
+send "$password\r"
+expect eof
+
+spawn scp -o StrictHostKeyChecking=no web/app.py root@$ip:/root/opi_gpio_app/web/
+expect "password:"
+send "$password\r"
+expect eof
+
+spawn scp -o StrictHostKeyChecking=no web/templates/system.html root@$ip:/root/opi_gpio_app/web/templates/
+expect "password:"
+send "$password\r"
+expect eof
+
+# 2. Run remote commands
+spawn ssh -o StrictHostKeyChecking=no root@$ip "chmod +x /root/opi_gpio_app/update_manual.sh && /root/opi_gpio_app/venv/bin/pip install python-multipart && systemctl restart opi_gpio.service && systemctl restart opi_web.service"
+expect "password:"
+send "$password\r"
+expect eof

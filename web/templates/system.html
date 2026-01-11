@@ -28,6 +28,19 @@
             Update Now
         </button>
     </div>
+
+    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+        <p style="font-weight: 600; margin-bottom: 1rem;"><i class="fas fa-file-archive"></i> Manual ZIP Update</p>
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="zip-file" accept=".zip" style="font-size: 0.9rem; color: var(--text-dim);">
+            <button onclick="uploadZip()" id="upload-btn" class="secondary">
+                <i class="fas fa-upload"></i> Upload & Update
+            </button>
+        </div>
+        <p style="margin-top: 0.5rem; font-size: 0.8rem; opacity: 0.7;">
+            Upload a repository ZIP (e.g., from GitHub) to manually update the system.
+        </p>
+    </div>
 </div>
 
 <div class="card animate-fade">
@@ -98,6 +111,38 @@
             alert("Update trigger failed.");
             btn.disabled = false;
             btn.innerText = "Update Now";
+        }
+    }
+
+    async function uploadZip() {
+        const fileInput = document.getElementById('zip-file');
+        if (!fileInput.files.length) {
+            alert("Please select a ZIP file first.");
+            return;
+        }
+
+        if (!confirm("Are you sure you want to upload and update from this ZIP file?")) return;
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        const btn = document.getElementById('upload-btn');
+        btn.disabled = true;
+        btn.innerText = "Uploading...";
+
+        try {
+            const response = await fetch('/api/update/zip', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            alert("ZIP uploaded successfully. Update is running. The system will restart.");
+        } catch (e) {
+            console.error(e);
+            alert("Upload failed.");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Upload & Update";
         }
     }
 

@@ -3,7 +3,7 @@ import gpiod
 import os
 import asyncio
 from datetime import timedelta
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, File, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 from typing import List, Dict, Optional
@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 import subprocess
 import time
+import shutil
 from collections import deque
 
 # Dictionary to hold the requested GPIO line requests
@@ -901,6 +902,22 @@ async def system_reboot():
         return {"status": "success", "message": "Reboot sequence initiated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/update/zip")
+async def zip_update(file: UploadFile = File(...)):
+    """Handle manual ZIP update upload"""
+    try:
+        tmp_path = f"/tmp/{file.filename}"
+        with open(tmp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Trigger the manual update script in the background
+        # (It will restart this service)
+        subprocess.Popen(["/bin/bash", "/root/opi_gpio_app/update_manual.sh", tmp_path])
+        
+        return {"status": "success", "message": "ZIP upload received, update started"}
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.post("/system/shutdown")
 async def system_shutdown():

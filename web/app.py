@@ -98,6 +98,21 @@ def trigger_reboot():
 def trigger_shutdown():
     return jsonify(api_post("/system/shutdown"))
 
+@app.route('/api/update/zip', methods=['POST'])
+def update_zip():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    
+    try:
+        files = {'file': (file.filename, file.stream, file.mimetype)}
+        response = requests.post(f"{API_BASE_URL}/update/zip", files=files, timeout=30)
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/loxone/download/<type>')
 def download_loxone_template(type):
     # Mapping to actual hardware API endpoints

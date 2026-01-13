@@ -72,6 +72,18 @@ fi
 
 # 8. Setup mDNS (Avahi)
 echo "Configuring mDNS..."
+cat <<EOF > /etc/avahi/services/opi-gpio.service
+<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">%h GPIO Dashboard</name>
+  <service>
+    <type>_http._tcp</type>
+    <port>5000</port>
+  </service>
+</service-group>
+EOF
+
 systemctl enable avahi-daemon
 systemctl restart avahi-daemon
 

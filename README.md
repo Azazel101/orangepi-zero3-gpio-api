@@ -45,6 +45,23 @@ Access the premium interface via IP or mDNS hostname:
 *   **mDNS**: `http://orangepizero3.local:5000` (Default hostname)
 *   **IP**: `http://<ORANGE_PI_IP>:5000`
 
+### 🔍 Discovery
+If you don't know the hostname, you can find the device on your network:
+
+**macOS (Terminal):**
+```bash
+dns-sd -B _http._tcp
+# Look for "orangepizero3 GPIO Dashboard"
+```
+
+**Linux:**
+```bash
+avahi-browse -r _http._tcp
+```
+
+**Windows:**
+Use a Bonjour browser or `nslookup -q=MDNS orangepizero3.local` if you know the name but need the IP.
+
 Features include:
 - **Real-time Status**: Live connection monitoring and system health.
 - **Pin Grid**: Visual control of all GPIOs (Green = HIGH, Grey = LOW).

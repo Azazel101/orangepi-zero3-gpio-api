@@ -129,7 +129,7 @@ def download_loxone_template(type):
         response = requests.get(f"{API_BASE_URL}{endpoints[type]}", timeout=10)
         return response.text, 200, {
             'Content-Type': 'application/xml',
-            'Content-Disposition': f'attachment; filename=loxone_{type}.xml'
+            'Content-Disposition': f'attachment; filename=loxio_{type}.xml'
         }
     except Exception as e:
         return f"Error downloading template: {str(e)}", 500

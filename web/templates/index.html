@@ -24,7 +24,7 @@
             <span class="stat-value">
                 <span title="Inputs" style="font-size: 1.1rem; color: #555;">{{ io_counts.input }} IN</span>
                 <span style="color: #ccc; margin: 0 0.5rem;">|</span>
-                <span title="Outputs" style="font-size: 1.1rem; color: var(--loxone-green);">{{ io_counts.output }}
+                <span title="Outputs" style="font-size: 1.1rem; color: var(--loxio-green);">{{ io_counts.output }}
                     OUT</span>
             </span>
         </div>
@@ -39,7 +39,7 @@
         </div>
         <p><strong>Device:</strong> {{ net_status.ethernet.device if net_status.ethernet.active else
             net_status.wifi.device or 'None' }}</p>
-        <p><strong>IP Address:</strong> <span style="color: var(--loxone-green); font-weight: 600;">{{
+        <p><strong>IP Address:</strong> <span style="color: var(--loxio-green); font-weight: 600;">{{
                 net_status.main_ip }}</span></p>
         <div style="margin-top: 1rem;">
             <a href="/network" class="secondary-btn"><button class="secondary">Manage Network</button></a>

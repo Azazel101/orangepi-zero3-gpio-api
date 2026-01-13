@@ -1,26 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --loxone-green: #69C350;
-    --loxone-dark-grey: #3A4045;
-    --loxone-light-grey: #F4F4F4;
-    --loxone-white: #FFFFFF;
-    --loxone-border-radius: 12px;
-    --loxone-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-    --loxone-error: #d93025;
-    --loxone-error-bg: #fce8e6;
+    --loxio-green: #69C350;
+    --loxio-dark-grey: #3A4045;
+    --loxio-light-grey: #F4F4F4;
+    --loxio-white: #FFFFFF;
+    --loxio-border-radius: 12px;
+    --loxio-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    --loxio-error: #d93025;
+    --loxio-error-bg: #fce8e6;
     --transition: all 0.3s ease;
 
     /* Theme Variables - Default Light */
-    --bg-body: var(--loxone-light-grey);
-    --bg-card: var(--loxone-white);
-    --bg-stat: var(--loxone-light-grey);
-    --bg-header: var(--loxone-white);
-    --text-main: var(--loxone-dark-grey);
+    --bg-body: var(--loxio-light-grey);
+    --bg-card: var(--loxio-white);
+    --bg-stat: var(--loxio-light-grey);
+    --bg-header: var(--loxio-white);
+    --text-main: var(--loxio-dark-grey);
     --text-dim: #888;
     --border-color: #eee;
-    --input-bg: var(--loxone-white);
+    --input-bg: var(--loxio-white);
     --input-border: #ddd;
+    --nav-active: var(--loxio-green);
 }
 
 body.dark-mode {
@@ -31,7 +32,7 @@ body.dark-mode {
     --text-main: #e0e0e0;
     --text-dim: #aaa;
     --border-color: #333;
-    --loxone-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --loxio-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     --input-bg: #2a2a2a;
     --input-border: #444;
 }
@@ -53,7 +54,7 @@ body {
 header {
     background-color: var(--bg-header);
     padding: 1.5rem 2rem;
-    box-shadow: var(--loxone-shadow);
+    box-shadow: var(--loxio-shadow);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -65,7 +66,7 @@ header {
 .logo {
     font-weight: 700;
     font-size: 1.5rem;
-    color: var(--loxone-green);
+    color: var(--loxio-green);
     text-decoration: none;
     display: flex;
     align-items: center;
@@ -86,7 +87,7 @@ header {
 
 .nav-links a:hover,
 .nav-links a.active {
-    color: var(--loxone-green);
+    color: var(--loxio-green);
 }
 
 main {
@@ -97,9 +98,9 @@ main {
 
 .card {
     background: var(--bg-card);
-    border-radius: var(--loxone-border-radius);
+    border-radius: var(--loxio-border-radius);
     padding: 2rem;
-    box-shadow: var(--loxone-shadow);
+    box-shadow: var(--loxio-shadow);
     margin-bottom: 2rem;
 }
 
@@ -136,11 +137,11 @@ main {
 .stat-value {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--loxone-green);
+    color: var(--loxio-green);
 }
 
 button {
-    background-color: var(--loxone-green);
+    background-color: var(--loxio-green);
     color: white;
     border: none;
     padding: 0.75rem 1.5rem;
@@ -161,12 +162,12 @@ button:hover {
 
 button.secondary {
     background-color: transparent;
-    border: 2px solid var(--loxone-green);
-    color: var(--loxone-green);
+    border: 2px solid var(--loxio-green);
+    color: var(--loxio-green);
 }
 
 button.secondary:hover {
-    background-color: var(--loxone-green);
+    background-color: var(--loxio-green);
     color: white;
 }
 
@@ -195,7 +196,7 @@ button:disabled {
 }
 
 button.danger {
-    background-color: var(--loxone-error);
+    background-color: var(--loxio-error);
     color: white;
 }
 
@@ -249,8 +250,8 @@ button.danger:hover {
 }
 
 .status-on {
-    background: var(--loxone-green);
-    box-shadow: 0 0 10px var(--loxone-green);
+    background: var(--loxio-green);
+    box-shadow: 0 0 10px var(--loxio-green);
 }
 
 .status-off {

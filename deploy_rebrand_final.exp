@@ -1,0 +1,40 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set password "paradox"
+set ip "192.168.1.29"
+
+# Files to deploy
+set files {
+    "main.py"
+    "web/app.py"
+    "web/static/css/style.css"
+}
+
+foreach f $files {
+    spawn scp -o StrictHostKeyChecking=no $f root@$ip:/root/opi_gpio_app/$f
+    expect "password:"
+    send "$password\r"
+    expect eof
+}
+
+# Templates
+set templates {
+    "index.html"
+    "gpio.html"
+    "network.html"
+    "system.html"
+}
+
+foreach t $templates {
+    spawn scp -o StrictHostKeyChecking=no web/templates/$t root@$ip:/root/opi_gpio_app/web/templates/$t
+    expect "password:"
+    send "$password\r"
+    expect eof
+}
+
+# Remote commands
+spawn ssh -o StrictHostKeyChecking=no root@$ip "systemctl restart opi_gpio.service && systemctl restart opi_web.service"
+expect "password:"
+send "$password\r"
+expect eof

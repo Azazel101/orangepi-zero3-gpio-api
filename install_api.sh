@@ -76,7 +76,7 @@ cat <<EOF > /etc/avahi/services/opi-gpio.service
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
 <service-group>
-  <name replace-wildcards="yes">%h LoxIO Core</name>
+  <name replace-wildcards="yes">LoxIO Core %h</name>
   <service>
     <type>_http._tcp</type>
     <port>5000</port>

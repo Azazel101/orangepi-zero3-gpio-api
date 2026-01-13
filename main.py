@@ -244,6 +244,7 @@ def get_system_info():
     info = {
         "board": "unknown",
         "os": "unknown",
+        "hostname": socket.gethostname(),
         "kernel": platform.release(),
         "arch": platform.machine(),
         "uptime": "unknown",
@@ -328,6 +329,7 @@ async def health():
         "status": "healthy",
         "board_info": {
             "name": sys_info["board"],
+            "hostname": sys_info["hostname"],
             "os": sys_info["os"],
             "kernel": sys_info["kernel"],
             "arch": sys_info["arch"],

@@ -1,0 +1,22 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set password "paradox"
+set ip "192.168.1.29"
+
+# Deploy updated files
+spawn scp -o StrictHostKeyChecking=no main.py root@$ip:/root/opi_gpio_app/main.py
+expect "password:"
+send "$password\r"
+expect eof
+
+spawn scp -o StrictHostKeyChecking=no web/templates/index.html root@$ip:/root/opi_gpio_app/web/templates/index.html
+expect "password:"
+send "$password\r"
+expect eof
+
+# Restart services
+spawn ssh -o StrictHostKeyChecking=no root@$ip "systemctl restart opi_gpio.service && systemctl restart opi_web.service"
+expect "password:"
+send "$password\r"
+expect eof

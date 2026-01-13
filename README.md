@@ -41,8 +41,9 @@ chmod +x install_web.sh
 ```
 
 ## 📱 Web Dashboard
-Access the premium interface at:
-`http://<ORANGE_PI_IP>:5000`
+Access the premium interface via IP or mDNS hostname:
+*   **mDNS**: `http://orangepizero3.local:5000` (Default hostname)
+*   **IP**: `http://<ORANGE_PI_IP>:5000`
 
 Features include:
 - **Real-time Status**: Live connection monitoring and system health.

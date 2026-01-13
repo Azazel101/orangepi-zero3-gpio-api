@@ -1,6 +1,7 @@
-# 🍊 Orange Pi Zero 3 GPIO API & Web Dashboard
+# 🍊 LoxIO Core (by RS Soft)
+## Professional GPIO API & Web Dashboard
 
-A powerful, FastAPI-based REST API and a Loxone-inspired Web Dashboard to control the GPIO pins on an Orange Pi Zero 3 (v1.2). Designed for seamless smart home integration and easy network management.
+**LoxIO Core** is a powerful, FastAPI-based REST API and a Loxone-inspired Web Dashboard to control the GPIO pins on an Orange Pi Zero 3 (v1.2). Designed for seamless smart home integration and easy network management.
 
 ## 🌟 Key Features
 *   **Full GPIO Control**: Control pins as Inputs or Outputs via JSON API or Web UI.

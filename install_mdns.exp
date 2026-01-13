@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "paradox"
+set ip "192.168.1.29"
+
+spawn ssh -o StrictHostKeyChecking=no root@$ip "apt update && apt install -y avahi-daemon && systemctl enable avahi-daemon && systemctl restart avahi-daemon"
+expect {
+    "password:" { send "$password\r" }
+}
+expect eof

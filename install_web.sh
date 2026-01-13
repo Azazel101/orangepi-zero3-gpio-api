@@ -8,7 +8,7 @@ fi
 
 WEB_DIR="/root/opi_gpio_app/web"
 
-echo "--- Installing OPI GPIO Web UI ---"
+echo "--- Installing LoxIO Core Web UI (by RS Soft) ---"
 
 # Install Flask and Requests
 apt update
@@ -21,7 +21,7 @@ apt install -y python3-flask python3-requests
 # Create Systemd Service
 cat <<EOF > /etc/systemd/system/opi_web.service
 [Unit]
-Description=Orange Pi GPIO Web UI
+Description=LoxIO Core Web UI
 After=network.target opi_gpio.service
 
 [Service]

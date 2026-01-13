@@ -201,9 +201,10 @@ async def lifespan(app: FastAPI):
     line_requests.clear()
 
 app = FastAPI(
-    title="Orange Pi Zero 3 GPIO API (v2)",
+    title="LoxIO Core API",
     description="""
-A FastAPI application with Input and Interrupt support for Orange Pi Zero 3.
+**LoxIO Core** is a high-performance GPIO control system by **RS Soft**.
+Designed for Orange Pi Zero 3.
 
 ![Orange Pi Zero 3 Pinout](/static/pinout.png)
 

@@ -1,5 +1,5 @@
 [Unit]
-Description=Orange Pi GPIO FastAPI Service
+Description=LoxIO Core API Service
 After=network.target
 
 [Service]

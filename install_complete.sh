@@ -10,7 +10,7 @@ fi
 TARGET_IP=$1
 PASSWORD="paradox"
 
-echo "--- Starting Remote Installation on $TARGET_IP ---"
+echo "--- Starting LoxIO Core Remote Installation on $TARGET_IP ---"
 echo "WARNING: This will wipe specific existing data on the target for a fresh install."
 read -p "Press Enter to continue..."
 

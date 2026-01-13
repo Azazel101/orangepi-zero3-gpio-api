@@ -16,7 +16,7 @@ if [ -z "$ZIP_FILE" ] || [ ! -f "$ZIP_FILE" ]; then
     exit 1
 fi
 
-log "--- Starting Manual ZIP Update ---"
+log "--- Starting LoxIO Core Manual ZIP Update ---"
 log "Source: $ZIP_FILE"
 
 # 1. Clean and Prepare Extract Dir
@@ -90,4 +90,4 @@ fi
 # Cleanup
 rm -rf "$EXTRACT_DIR"
 rm -f "$ZIP_FILE"
-log "--- Manual Update Finished ---"
+log "--- LoxIO Core Manual Update Finished ---"

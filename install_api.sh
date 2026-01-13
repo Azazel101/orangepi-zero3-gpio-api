@@ -9,7 +9,7 @@ fi
 APP_DIR="/root/opi_gpio_app"
 SERVICE_FILE="opi_gpio.service"
 
-echo "--- Installing Orange Pi GPIO API ---"
+echo "--- Installing LoxIO Core API (by RS Soft) ---"
 
 # 1. Install system dependencies
 echo "Installing system dependencies..."
@@ -76,7 +76,7 @@ cat <<EOF > /etc/avahi/services/opi-gpio.service
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
 <service-group>
-  <name replace-wildcards="yes">%h GPIO Dashboard</name>
+  <name replace-wildcards="yes">%h LoxIO Core</name>
   <service>
     <type>_http._tcp</type>
     <port>5000</port>

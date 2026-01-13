@@ -13,7 +13,7 @@ cd "$APP_DIR" || { log "Failed to cd to $APP_DIR"; exit 1; }
 
 # 1. Save current state
 COMMIT_BEFORE=$(git rev-parse HEAD)
-log "--- Starting Safe Update ---"
+log "--- Starting LoxIO Core Safe Update ---"
 log "Current commit: $COMMIT_BEFORE"
 
 # 2. Update

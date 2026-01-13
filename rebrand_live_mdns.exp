@@ -1,0 +1,27 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+set password "paradox"
+set ip "192.168.1.29"
+
+spawn ssh -o StrictHostKeyChecking=no root@$ip
+expect {
+    "password:" { send "$password\r" }
+}
+
+expect "#"
+send "echo '<?xml version=\"1.0\" standalone=\"no\"?>' > /etc/avahi/services/opi-gpio.service\r"
+send "echo '<!DOCTYPE service-group SYSTEM \"avahi-service.dtd\">' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '<service-group>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '  <name replace-wildcards=\"yes\">%h LoxIO Core</name>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '  <service>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '    <type>_http._tcp</type>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '    <port>5000</port>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '  </service>' >> /etc/avahi/services/opi-gpio.service\r"
+send "echo '</service-group>' >> /etc/avahi/services/opi-gpio.service\r"
+
+expect "#"
+send "systemctl restart avahi-daemon\r"
+expect "#"
+send "exit\r"
+expect eof

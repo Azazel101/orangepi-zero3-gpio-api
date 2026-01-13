@@ -40,3 +40,4 @@ systemctl enable opi_web.service
 systemctl restart opi_web.service
 
 echo "Web UI is running on: http://$(hostname -I | awk '{print $1}'):5000"
+echo "mDNS Hostname: http://$(hostname).local:5000"

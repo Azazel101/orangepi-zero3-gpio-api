@@ -14,7 +14,7 @@ echo "--- Installing Orange Pi GPIO API ---"
 # 1. Install system dependencies
 echo "Installing system dependencies..."
 apt update
-apt install -y python3-venv libgpiod-dev gpiod git network-manager
+apt install -y python3-venv libgpiod-dev gpiod git network-manager avahi-daemon
 
 # 2. Setup Virtual Environment
 echo "Setting up Python virtual environment..."
@@ -70,6 +70,12 @@ else
      git fetch --all
 fi
 
+# 8. Setup mDNS (Avahi)
+echo "Configuring mDNS..."
+systemctl enable avahi-daemon
+systemctl restart avahi-daemon
+
 echo "--- Installation Complete ---"
 echo "You can check status with: systemctl status $SERVICE_FILE"
 echo "API is running on: http://$(hostname -I | awk '{print $1}'):8000"
+echo "mDNS Hostname: http://$(hostname).local:8000"

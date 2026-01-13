@@ -24,10 +24,6 @@ cat <<EOF > /etc/systemd/system/opi_web.service
 Description=Orange Pi GPIO Web UI
 After=network.target opi_gpio.service
 
-[Unit]
-Description=Orange Pi GPIO Web UI
-After=network.target opi_gpio.service
-
 [Service]
 Type=simple
 User=root

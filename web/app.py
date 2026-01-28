@@ -27,12 +27,19 @@ def index():
     net_status = api_get("/network/status")
     pins = api_get("/pins/status")
     
-    # Calculate counts if pins is a list
+    # Defensive structures in case of API failure
+    if "error" in health:
+        health = {"system_stats": {"cpu_temp_c": 0, "ram": {"percent": 0}}, "board_info": {"uptime": "Unknown", "hostname": "Unknown", "os": "Unknown", "kernel": "Unknown"}}
+    if "error" in net_status:
+        net_status = {"ethernet": {"active": False}, "wifi": {"active": False}, "main_ip": "Offline"}
+    if "error" in pins or not isinstance(pins, list):
+        pins = []
+
+    # Calculate counts
     io_counts = {"input": 0, "output": 0}
-    if isinstance(pins, list):
-        for pin in pins:
-            if pin.get('direction') in io_counts:
-                io_counts[pin['direction']] += 1
+    for pin in pins:
+        if pin.get('direction') in io_counts:
+            io_counts[pin['direction']] += 1
                 
     return render_template('index.html', 
                           health=health, 
@@ -42,17 +49,25 @@ def index():
 @app.route('/gpio')
 def gpio_page():
     pins = api_get("/pins/status")
+    if "error" in pins or not isinstance(pins, list):
+        pins = []
     return render_template('gpio.html', pins=pins)
 
 @app.route('/network')
 def network_page():
     status = api_get("/network/status")
+    if "error" in status:
+        status = {"ethernet": {"active": False}, "wifi": {"active": False}, "main_ip": "Offline"}
     return render_template('network.html', status=status)
 
 @app.route('/system')
 def system_page():
     health = api_get("/health")
+    if "error" in health:
+        health = {"system_stats": {"cpu_temp_c": 0, "ram": {"percent": 0}}, "board_info": {"uptime": "Unknown", "hostname": "Unknown", "os": "Unknown", "kernel": "Unknown"}}
     update_info = api_get("/update/check")
+    if "error" in update_info:
+        update_info = {"local_hash": "Unknown", "update_available": False, "error": True}
     return render_template('system.html', health=health, update_info=update_info)
 
 # API Proxies for AJAX calls

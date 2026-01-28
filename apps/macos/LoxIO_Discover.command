@@ -19,34 +19,46 @@ sleep 3
 kill "$SCAN_PID" 2>/dev/null
 
 # Filter for LoxIO devices and extract the instance names
-# We look for lines containing "LoxIO" and extract the name (column 7+)
-DEVICES=$(grep "LoxIO" "$SCAN_FILE" | awk '{for(i=7;i<=NF;i++) printf "%s%s", $i, (i==NF?"":" ")}' | sort | uniq)
+# The Instance Name starts at column 7 in dns-sd -B output
+DEVICES=$(grep "LoxIO" "$SCAN_FILE" | awk '{ $1=$2=$3=$4=$5=$6=""; print $0 }' | sed 's/^[ \t]*//' | sort | uniq)
 
 rm -f "$SCAN_FILE"
 
 if [ -z "$DEVICES" ]; then
     echo "No LoxIO devices found."
-    osascript -e 'display alert "LoxIO Discovery" message "No LoxIO devices were found on your local network. Please ensure they are powered on and connected to the same Wi-Fi/Ethernet."'
+    osascript -e 'display alert "LoxIO Discovery" message "No LoxIO devices were found on your local network. Please ensure they are powered on and connected to the same network."'
     exit 0
 fi
 
 echo "Found devices:"
 echo "$DEVICES"
 
-# Use AppleScript to show a selection dialog
-SELECTED=$(echo "$DEVICES" | osascript -e 'set theList to paragraphs of (do shell script "cat")' \
--e 'choose from list theList with title "LoxIO Discovery" with prompt "Select a LoxIO device to open the dashboard:" default items {item 1 of theList}' \
--e 'if result is false then return "CANCEL"' \
--e 'return result')
+# Use AppleScript to show a selection dialog. We pass the list as arguments to avoid cat/pipe issues.
+SELECTED=$(osascript <<EOT
+    set deviceString to "$DEVICES"
+    set theList to paragraphs of deviceString
+    if (count of theList) is 0 then
+        return "CANCEL"
+    end if
+    tell application "System Events"
+        activate
+        choose from list theList with title "LoxIO Discovery" with prompt "Select a LoxIO device to open the dashboard:" default items {item 1 of theList}
+    end tell
+    if result is false then
+        return "CANCEL"
+    else
+        return item 1 of result
+    end if
+EOT
+)
 
-if [ "$SELECTED" != "CANCEL" ]; then
-    # Convert name to .local address (Instance names are often same as hostname)
-    # LoxIO Core LoxIO-XXXXX -> LoxIO-XXXXX.local
-    HOSTNAME=$(echo "$SELECTED" | grep -o "LoxIO-[A-Z0-9]*")
+if [ "$SELECTED" != "CANCEL" ] && [ -n "$SELECTED" ]; then
+    # Extract Hostname (look for LoxIO-XXXXX pattern)
+    HOSTNAME=$(echo "$SELECTED" | grep -oEi "LoxIO-[A-Z0-9]+")
     
     if [ -z "$HOSTNAME" ]; then
-        # Fallback to direct name if regex fails
-        HOSTNAME=$(echo "$SELECTED" | tr ' ' '-')
+        # Last resort fallback: use the first word or the whole name
+        HOSTNAME=$(echo "$SELECTED" | awk '{print $1}')
     fi
     
     URL="http://$HOSTNAME.local:5000"

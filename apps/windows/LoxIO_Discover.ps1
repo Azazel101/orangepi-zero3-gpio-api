@@ -26,10 +26,20 @@ $DeviceList.Size = New-Object System.Drawing.Size(340, 300)
 $DeviceList.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $Form.Controls.Add($DeviceList)
 
+$BtnSearch = New-Object System.Windows.Forms.Button
+$BtnSearch.Text = "Search"
+$BtnSearch.Location = New-Object System.Drawing.Point(20, 380)
+$BtnSearch.Size = New-Object System.Drawing.Size(160, 45)
+$BtnSearch.BackColor = "#3A4045"
+$BtnSearch.ForeColor = "White"
+$BtnSearch.FlatStyle = "Flat"
+$BtnSearch.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$Form.Controls.Add($BtnSearch)
+
 $BtnOpen = New-Object System.Windows.Forms.Button
 $BtnOpen.Text = "Open Dashboard"
-$BtnOpen.Location = New-Object System.Drawing.Point(20, 380)
-$BtnOpen.Size = New-Object System.Drawing.Size(340, 45)
+$BtnOpen.Location = New-Object System.Drawing.Point(190, 380)
+$BtnOpen.Size = New-Object System.Drawing.Size(170, 45)
 $BtnOpen.BackColor = "#69C350"
 $BtnOpen.ForeColor = "White"
 $BtnOpen.FlatStyle = "Flat"
@@ -84,6 +94,10 @@ $BtnOpen.Add_Click({
         $url = "http://$hostname.local:5000"
         [System.Diagnostics.Process]::Start($url)
     }
+})
+
+$BtnSearch.Add_Click({
+    Start-Discovery
 })
 
 # Run discovery on start

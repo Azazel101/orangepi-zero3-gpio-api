@@ -70,7 +70,20 @@ else
      git fetch --all
 fi
 
-# 8. Setup mDNS (Avahi)
+# 8. Set Unique Hostname based on ChipID
+echo "Setting unique hostname..."
+if [ -f "/sys/class/sunxi_info/sys_info" ]; then
+    CHIP_ID=$(grep "sunxi_chipid" /sys/class/sunxi_info/sys_info | awk '{print $3}')
+    if [ ! -z "$CHIP_ID" ]; then
+        UNIQUE_ID=$(echo -n "$CHIP_ID" | md5sum | cut -c1-10 | tr '[:lower:]' '[:upper:]')
+        NEW_HOSTNAME="LoxIO-$UNIQUE_ID"
+        hostnamectl set-hostname "$NEW_HOSTNAME"
+        sed -i "s/127.0.1.1.*/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts
+        echo "Hostname updated to $NEW_HOSTNAME"
+    fi
+fi
+
+# 9. Setup mDNS (Avahi)
 echo "Configuring mDNS..."
 cat <<EOF > /etc/avahi/services/opi-gpio.service
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->

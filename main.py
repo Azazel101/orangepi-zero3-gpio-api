@@ -17,6 +17,8 @@ import subprocess
 import time
 import shutil
 from collections import deque
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Dictionary to hold the requested GPIO line requests
 # Key: (chip_path, line_offset), Value: gpiod.LineRequest
@@ -25,7 +27,24 @@ line_requests = {}
 pin_mapping = {}
 
 CONFIG_FILE = "gpio_config.json"
-LOG_FILE = "app.log"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPTS_DIR = os.path.join(APP_DIR, "scripts")
+LOG_FILE = os.path.join(APP_DIR, "app.log")
+
+# Setup Structured Logging
+logger = logging.getLogger("LoxIO")
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+# Rotating handler: 1MB per file, keeps 5 backups
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1*1024*1024, backupCount=5)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Also log to console for development
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
 
 class PinState(BaseModel):
     pin_num: int
@@ -51,7 +70,7 @@ stats_history = deque(maxlen=360)
 
 async def monitor_stats():
     """Background task to collect system stats every 10 seconds."""
-    print("Stats monitor: Task started")
+    logger.info("Stats monitor: Task started")
     while True:
         try:
             # CPU temperature
@@ -76,13 +95,13 @@ async def monitor_stats():
             })
             
         except Exception as e:
-            print(f"Stats monitor error: {e}")
+            logger.error(f"Stats monitor error: {e}")
             
         await asyncio.sleep(10)
 
 async def monitor_interrupts():
     """Background task to poll for GPIO edge events."""
-    print("Interrupt monitor: Task started")
+    logger.info("Interrupt monitor: Task started")
     while True:
         try:
             for (chip_path, line_offset), req in line_requests.items():
@@ -95,9 +114,7 @@ async def monitor_interrupts():
                         for event in events:
                             pin_num = next((k for k, v in pin_mapping.items() if v == (chip_path, line_offset)), "unknown")
                             msg = f"Interrupt on Pin {pin_num}: {'Rising' if event.event_type == Edge.RISING else 'Falling'}"
-                            print(msg)
-                            with open(LOG_FILE, "a") as f:
-                                f.write(f"INFO: {msg}\n")
+                            logger.info(msg)
                             await event_queue.put({
                                 "pin": pin_num, 
                                 "event": "Rising" if event.event_type == Edge.RISING else "Falling",
@@ -108,23 +125,23 @@ async def monitor_interrupts():
                     pass
             await asyncio.sleep(0.1)
         except asyncio.CancelledError:
-            print("Interrupt monitor: Task cancelled")
+            logger.info("Interrupt monitor: Task cancelled")
             break
         except Exception as e:
-            print(f"Interrupt monitor error: {e}")
+            logger.error(f"Interrupt monitor error: {e}")
             await asyncio.sleep(1)
 
 def init_gpios():
-    print("Initialising GPIOs (v2 API - Input/Interrupt Mode)...")
+    logger.info("Initialising GPIOs (v2 API - Input/Interrupt Mode)...")
     if not os.path.exists(CONFIG_FILE):
-        print(f"Error: {CONFIG_FILE} not found.")
+        logger.error(f"Error: {CONFIG_FILE} not found.")
         return
 
     try:
         with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
     except Exception as e:
-        print(f"Error loading config: {e}")
+        logger.error(f"Error loading config: {e}")
         return
 
     for pin_cfg in config.get("pins", []):
@@ -167,12 +184,10 @@ def init_gpios():
                 config={line_offset: settings}
             )
             line_requests[(chip_path, line_offset)] = req
-            print(f"Successfully requested Pin {pin_num} ({direction_str}) on {chip_path}")
+            logger.info(f"Successfully requested Pin {pin_num} ({direction_str}) on {chip_path}")
         except Exception as e:
             msg = f"Failed to request Pin {pin_num} ({direction_str}) on {chip_path}: {e}"
-            print(msg)
-            with open(LOG_FILE, "a") as f:
-                f.write(f"ERROR: {msg}\n")
+            logger.error(msg)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -183,7 +198,7 @@ async def lifespan(app: FastAPI):
     stats_task = asyncio.create_task(monitor_stats())
     yield
     # Shutdown
-    print("Cleaning up system...")
+    logger.info("Cleaning up system...")
     if interrupt_task:
         interrupt_task.cancel()
     if stats_task:
@@ -231,7 +246,7 @@ Designed for Orange Pi Zero 3.
     lifespan=lifespan
 )
 
-app.mount("/static", StaticFiles(directory="/root/opi_gpio_app"), name="static")
+app.mount("/static", StaticFiles(directory=APP_DIR), name="static")
 
 @app.get("/")
 async def root():
@@ -433,12 +448,16 @@ async def toggle_pin(pin_num: int):
 @app.get("/logs")
 async def get_logs(lines: int = 100):
     if not os.path.exists(LOG_FILE):
-        return {"message": "Log file not found"}
+        return {"logs": ["Log file not found"]}
     try:
+        # Read the last N lines efficiently
         with open(LOG_FILE, "r") as f:
-            content = f.readlines()
-            return {"logs": content[-lines:]}
+            # For simplicity with rotating logs, we just read all lines if file is small, 
+            # or use deque for large files.
+            content = deque(f, maxlen=lines)
+            return {"logs": [line.strip() for line in content]}
     except Exception as e:
+        logger.error(f"Error reading logs: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/loxone/status", response_class=PlainTextResponse)
@@ -646,11 +665,11 @@ async def check_update():
     """Check if update is available"""
     try:
         # Fetch latest changes without applying
-        subprocess.run(["git", "fetch", "origin", "main"], cwd="/root/opi_gpio_app", check=True)
+        subprocess.run(["git", "fetch", "origin", "main"], cwd=APP_DIR, check=True)
         
         # Get local and remote hashes
-        local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
-        remote_hash = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd="/root/opi_gpio_app", text=True).strip()
+        local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=APP_DIR, text=True).strip()
+        remote_hash = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=APP_DIR, text=True).strip()
         
         update_available = local_hash != remote_hash
         return {
@@ -661,7 +680,7 @@ async def check_update():
     except Exception as e:
         local_hash = "Unknown"
         try:
-            local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
+            local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=APP_DIR, text=True).strip()
         except: pass
         return {
             "error": str(e), 
@@ -675,21 +694,22 @@ async def ota_update(force: bool = False):
     try:
         # First check if update is needed (unless forced)
         if not force:
-             subprocess.run(["git", "fetch", "origin", "main"], cwd="/root/opi_gpio_app", check=True)
-             local = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd="/root/opi_gpio_app", text=True).strip()
-             remote = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd="/root/opi_gpio_app", text=True).strip()
+             subprocess.run(["git", "fetch", "origin", "main"], cwd=APP_DIR, check=True)
+             local = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=APP_DIR, text=True).strip()
+             remote = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=APP_DIR, text=True).strip()
              if local == remote:
                  return {"status": "skipped", "message": "Already up to date"}
 
         # Verification check: Ensure script exists
-        if not os.path.exists("/root/opi_gpio_app/update_safe.sh"):
-             return {"status": "error", "message": "Safety script missing. Cannot update safely."}
+        update_script = os.path.join(SCRIPTS_DIR, "update_safe.sh")
+        if not os.path.exists(update_script):
+             return {"status": "error", "message": f"Safety script missing at {update_script}. Cannot update safely."}
 
         # Run the safe update script in non-blocking way (fire and forget)
         # We use start_new_session to detach prompts/signals so it survives restart
         subprocess.Popen(
-            ["/bin/bash", "/root/opi_gpio_app/update_safe.sh"],
-            cwd="/root/opi_gpio_app",
+            ["/bin/bash", update_script],
+            cwd=APP_DIR,
             start_new_session=True
         )
         
@@ -917,7 +937,8 @@ async def zip_update(file: UploadFile = File(...)):
         
         # Trigger the manual update script in the background
         # (It will restart this service)
-        subprocess.Popen(["/bin/bash", "/root/opi_gpio_app/update_manual.sh", tmp_path])
+        manual_update_script = os.path.join(SCRIPTS_DIR, "update_manual.sh")
+        subprocess.Popen(["/bin/bash", manual_update_script, tmp_path])
         
         return {"status": "success", "message": "ZIP upload received, update started"}
     except Exception as e:

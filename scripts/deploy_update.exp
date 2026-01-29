@@ -1,0 +1,44 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+set password "paradox"
+set ip "192.168.1.29"
+set target_dir "/root/opi_gpio_app"
+
+puts "--- Starting Full Update Deployment to $ip ---"
+
+# 1. Copy Root Files
+set root_files {
+    "main.py"
+    "opi_gpio.service"
+    "gpio_config.json"
+    "requirements.txt"
+}
+
+foreach f $root_files {
+    spawn scp -o StrictHostKeyChecking=no $f root@$ip:$target_dir/$f
+    expect "password:"
+    send "$password\r"
+    expect eof
+}
+
+# 2. Copy Directories (Web and Scripts)
+set dirs {
+    "web"
+    "scripts"
+}
+
+foreach d $dirs {
+    spawn scp -r -o StrictHostKeyChecking=no $d root@$ip:$target_dir/
+    expect "password:"
+    send "$password\r"
+    expect eof
+}
+
+# 3. Finalize and Restart
+spawn ssh -o StrictHostKeyChecking=no root@$ip "chmod +x $target_dir/scripts/*.sh $target_dir/scripts/*.exp && systemctl daemon-reload && systemctl restart opi_gpio.service && systemctl restart opi_web.service"
+expect "password:"
+send "$password\r"
+expect eof
+
+puts "--- Deployment Finished ---"

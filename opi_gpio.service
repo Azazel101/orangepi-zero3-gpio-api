@@ -9,8 +9,8 @@ WorkingDirectory=/root/opi_gpio_app
 ExecStart=/root/opi_gpio_app/venv/bin/python3 main.py
 Restart=always
 RestartSec=5
-StandardOutput=append:/root/opi_gpio_app/app.log
-StandardError=append:/root/opi_gpio_app/app.log
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

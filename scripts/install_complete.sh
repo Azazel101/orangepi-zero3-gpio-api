@@ -43,12 +43,12 @@ send "cd /root/opi_gpio_app\r"
 
 # 4. Make scripts executable
 expect "#"
-send "chmod +x *.sh\r"
+send "chmod +x scripts/*.sh scripts/*.exp\r"
 
 # 5. Run API Installer
 expect "#"
 send "echo '--- Step 3: Installing Hardware API ---'\r"
-send "./install_api.sh\r"
+send "./scripts/install_api.sh\r"
 
 # Wait significantly longer for install
 set timeout 600
@@ -56,9 +56,14 @@ set timeout 600
 # 6. Run Web Installer
 expect "#"
 send "echo '--- Step 4: Installing Web UI ---'\r"
-send "./install_web.sh\r"
+send "./scripts/install_web.sh\r"
 
-# 7. Final Check
+# 7. Set Unique Hostname
+expect "#"
+send "echo '--- Step 5: Setting Unique Hostname ---'\r"
+send "./scripts/set_hostname.sh\r"
+
+# 8. Final Check
 expect "#"
 send "systemctl status opi_gpio.service --no-pager\r"
 expect "#"

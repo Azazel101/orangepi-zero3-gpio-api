@@ -41,7 +41,7 @@ fi
 
 # 5. Set permissions for scripts
 echo "Setting script permissions..."
-chmod +x "$APP_DIR"/*.sh
+chmod +x "$APP_DIR"/scripts/*.sh "$APP_DIR"/scripts/*.exp
 
 # 6. Ensure NetworkManager is running
 echo "Checking NetworkManager service..."

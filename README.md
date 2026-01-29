@@ -16,12 +16,11 @@
 opi_gpio_app/
 ├── main.py            # Hardware REST API (FastAPI - Port 8000)
 ├── web/               # Web Dashboard (Flask - Port 5000)
-│   ├── app.py         # Dashboard Backend
-│   ├── templates/     # Loxone-style HTML
-│   └── static/        # CSS (Premium Styles) & JS (Real-time checks)
-├── install_api.sh     # Main API installer
-├── install_web.sh     # Web UI installer
-├── update_safe.sh     # Secure OTA Update script
+├── scripts/           # Installation and maintenance scripts
+│   ├── install_api.sh
+│   ├── install_web.sh
+│   ├── update_safe.sh
+│   └── ...
 └── TODO.md            # Future Roadmap
 ```
 
@@ -31,14 +30,13 @@ Run these commands on your Orange Pi as root:
 ### 1. Install Hardware API
 ```bash
 cd /root/opi_gpio_app
-chmod +x install_api.sh
-./install_api.sh
+chmod +x scripts/*.sh
+./scripts/install_api.sh
 ```
 
 ### 2. Install Web Dashboard
 ```bash
-chmod +x install_web.sh
-./install_web.sh
+./scripts/install_web.sh
 ```
 
 ## 📱 Web Dashboard

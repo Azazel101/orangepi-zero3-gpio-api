@@ -93,8 +93,9 @@
         style="background: #1e1e1e; color: #d4d4d4; padding: 1.5rem; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; height: 400px; overflow-y: scroll;">
         Loading logs...
     </div>
-    <div style="margin-top: 1rem;">
-        <button class="secondary" onclick="refreshLogs()">Refresh Logs</button>
+    <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+        <button class="secondary" onclick="refreshLogs()"><i class="fas fa-sync"></i> Refresh Now</button>
+        <button class="active" id="live-log-btn" onclick="toggleLiveLogs(this)">Stop Live Logs</button>
     </div>
 </div>
 
@@ -162,24 +163,54 @@
         }
     }
 
+    let logInterval = null;
+
     async function refreshLogs() {
         const container = document.getElementById('logs-container');
-        container.innerText = "Fetching latest logs...";
         try {
-            const response = await fetch("/api/logs");
+            const response = await fetch("/api/logs?lines=200");
             const data = await response.json();
-            if (data.logs) {
-                container.innerText = data.logs.join("");
-            } else {
-                container.innerText = JSON.stringify(data, null, 2);
+
+            if (data.logs && Array.isArray(data.logs)) {
+                // Parse and colorize logs
+                const colorized = data.logs.map(line => {
+                    let className = 'log-info';
+                    if (line.includes(' - ERROR - ')) className = 'log-error';
+                    else if (line.includes(' - WARNING - ')) className = 'log-warning';
+
+                    // Simple regex to pull out parts if we want more detail later
+                    // Format: 2026-01-29 20:25:34,123 - LoxIO - INFO - Message
+                    return `<div class="${className}">${line}</div>`;
+                }).join("");
+
+                container.innerHTML = colorized;
+
+                // Only scroll if already at bottom (optional feature, here we just scroll)
+                container.scrollTop = container.scrollHeight;
             }
-            container.scrollTop = container.scrollHeight;
         } catch (e) {
             container.innerText = "Error loading logs.";
         }
     }
 
-    // Initial load
+    function toggleLiveLogs(btn) {
+        if (logInterval) {
+            clearInterval(logInterval);
+            logInterval = null;
+            btn.classList.add('secondary');
+            btn.classList.remove('active');
+            btn.innerText = "Resume Live Logs";
+        } else {
+            refreshLogs();
+            logInterval = setInterval(refreshLogs, 5000);
+            btn.classList.remove('secondary');
+            btn.classList.add('active');
+            btn.innerText = "Stop Live Logs";
+        }
+    }
+
+    // Initial load and start live
     refreshLogs();
+    logInterval = setInterval(refreshLogs, 5000);
 </script>
 {% endblock %}

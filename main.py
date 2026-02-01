@@ -10,7 +10,6 @@ from typing import List, Dict, Optional
 from gpiod.line import Direction, Value, Edge, Bias
 import platform
 import socket
-from datetime import timedelta
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 import subprocess
@@ -20,11 +19,28 @@ from collections import deque
 import logging
 from logging.handlers import RotatingFileHandler
 
+# =============================================================================
+# CONFIGURATION CONSTANTS
+# =============================================================================
+STATS_COLLECT_INTERVAL_SEC = 10          # How often to collect system stats
+STATS_HISTORY_MAX_POINTS = 360           # Max history points (360 * 10s = 1 hour)
+INTERRUPT_POLL_INTERVAL_SEC = 0.1        # GPIO interrupt polling interval
+INTERRUPT_EDGE_TIMEOUT_SEC = 0.01        # Edge event wait timeout
+EVENT_QUEUE_MAX_SIZE = 1000              # Max queued GPIO events
+LOG_MAX_BYTES = 1 * 1024 * 1024          # 1MB per log file
+LOG_BACKUP_COUNT = 5                     # Number of log file backups
+TASK_HEALTH_CHECK_INTERVAL_SEC = 30      # Background task health check interval
+
+# =============================================================================
+# GLOBAL STATE
+# =============================================================================
 # Dictionary to hold the requested GPIO line requests
 # Key: (chip_path, line_offset), Value: gpiod.LineRequest
 line_requests = {}
 # Mapping: pin_num -> (chip_path, line_offset)
 pin_mapping = {}
+# Reverse mapping for efficient lookup: (chip_path, line_offset) -> pin_num
+reverse_pin_mapping = {}
 
 CONFIG_FILE = "gpio_config.json"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,8 +52,8 @@ logger = logging.getLogger("LoxIO")
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
-# Rotating handler: 1MB per file, keeps 5 backups
-file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1*1024*1024, backupCount=5)
+# Rotating handler with configurable size and backup count
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
@@ -63,41 +79,47 @@ class EthernetConfig(BaseModel):
 # Background task info
 interrupt_task = None
 stats_task = None
-event_queue = asyncio.Queue()
+task_monitor_task = None
+event_queue = asyncio.Queue(maxsize=EVENT_QUEUE_MAX_SIZE)
 # Circular buffer for stats: [(timestamp, cpu_temp, load_1m), ...]
-# 360 points at 10s interval = 1 hour of history
-stats_history = deque(maxlen=360)
+stats_history = deque(maxlen=STATS_HISTORY_MAX_POINTS)
 
 async def monitor_stats():
-    """Background task to collect system stats every 10 seconds."""
+    """Background task to collect system stats periodically."""
     logger.info("Stats monitor: Task started")
     while True:
         try:
             # CPU temperature
             cpu_temp = 0.0
             if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
-                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
-                    cpu_temp = int(f.read().strip()) / 1000.0
-            
+                try:
+                    with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                        cpu_temp = int(f.read().strip()) / 1000.0
+                except (IOError, ValueError) as e:
+                    logger.warning(f"Failed to read CPU temperature: {e}")
+
             # Load Average
             load_1m = 0.0
             if os.path.exists("/proc/loadavg"):
-                with open("/proc/loadavg", "r") as f:
-                    load_1m = float(f.read().split()[0])
-            
+                try:
+                    with open("/proc/loadavg", "r") as f:
+                        load_1m = float(f.read().split()[0])
+                except (IOError, ValueError) as e:
+                    logger.warning(f"Failed to read load average: {e}")
+
             # Timestamp (Local time as ISO string for frontend)
             current_time = time.strftime("%H:%M:%S")
-            
+
             stats_history.append({
                 "time": current_time,
                 "temp": round(cpu_temp, 1),
                 "load": round(load_1m, 2)
             })
-            
+
         except Exception as e:
-            logger.error(f"Stats monitor error: {e}")
-            
-        await asyncio.sleep(10)
+            logger.error(f"Stats monitor error: {e}", exc_info=True)
+
+        await asyncio.sleep(STATS_COLLECT_INTERVAL_SEC)
 
 async def monitor_interrupts():
     """Background task to poll for GPIO edge events."""
@@ -109,30 +131,100 @@ async def monitor_interrupts():
                 # In this app, we requested ALL inputs with edge detection
                 try:
                     # Use a very short timeout to avoid blocking the event loop
-                    if req.wait_edge_events(timeout=0.01):
+                    if req.wait_edge_events(timeout=INTERRUPT_EDGE_TIMEOUT_SEC):
                         events = req.read_edge_events()
                         for event in events:
-                            pin_num = next((k for k, v in pin_mapping.items() if v == (chip_path, line_offset)), "unknown")
-                            msg = f"Interrupt on Pin {pin_num}: {'Rising' if event.event_type == Edge.RISING else 'Falling'}"
-                            logger.info(msg)
-                            await event_queue.put({
-                                "pin": pin_num, 
-                                "event": "Rising" if event.event_type == Edge.RISING else "Falling",
-                                "timestamp": str(event.timestamp_ns)
-                            })
+                            # Use reverse mapping for efficient lookup
+                            pin_num = reverse_pin_mapping.get((chip_path, line_offset), "unknown")
+                            event_type = "Rising" if event.event_type == Edge.RISING else "Falling"
+                            logger.info(f"Interrupt on Pin {pin_num}: {event_type}")
+
+                            # Handle full queue gracefully
+                            try:
+                                event_queue.put_nowait({
+                                    "pin": pin_num,
+                                    "event": event_type,
+                                    "timestamp": str(event.timestamp_ns)
+                                })
+                            except asyncio.QueueFull:
+                                logger.warning(f"Event queue full, dropping event for Pin {pin_num}")
+                except gpiod.RequestReleasedError:
+                    # Line was released, skip it
+                    logger.debug(f"Line {chip_path}:{line_offset} was released, skipping")
+                except OSError as e:
+                    # Hardware I/O error on this specific line
+                    logger.debug(f"I/O error on {chip_path}:{line_offset}: {e}")
                 except Exception as e:
-                    # Not all lines support events (e.g. outputs)
-                    pass
-            await asyncio.sleep(0.1)
+                    # Log unexpected errors for debugging (not all lines support events)
+                    logger.debug(f"Edge event check failed for {chip_path}:{line_offset}: {e}")
+
+            await asyncio.sleep(INTERRUPT_POLL_INTERVAL_SEC)
         except asyncio.CancelledError:
             logger.info("Interrupt monitor: Task cancelled")
             break
         except Exception as e:
-            logger.error(f"Interrupt monitor error: {e}")
+            logger.error(f"Interrupt monitor error: {e}", exc_info=True)
             await asyncio.sleep(1)
 
+def validate_gpio_config(config: Dict) -> bool:
+    """Validate the GPIO configuration for logical errors and duplicates."""
+    if "pins" not in config or not isinstance(config["pins"], list):
+        raise ValueError("Config must contain a 'pins' list.")
+    
+    seen_nums = set()
+    seen_hardware = set()
+    valid_directions = ["input", "output", "disabled"]
+    valid_biases = ["none", "pull-up", "pull-down", "disabled"]
+
+    for pin in config["pins"]:
+        # Required fields
+        for field in ["num", "chip", "line", "direction", "bias"]:
+            if field not in pin:
+                raise ValueError(f"Pin {pin.get('num', 'unknown')} is missing required field: {field}")
+
+        # Type checks
+        if not isinstance(pin["num"], int) or not isinstance(pin["chip"], int) or not isinstance(pin["line"], int):
+            raise ValueError(f"Pin {pin['num']} chip/line/num must be integers.")
+
+        # Duplicate checks
+        if pin["num"] in seen_nums:
+            raise ValueError(f"Duplicate Pin number detected: {pin['num']}")
+        seen_nums.add(pin["num"])
+
+        hw_key = (pin["chip"], pin["line"])
+        if hw_key in seen_hardware:
+            raise ValueError(f"Duplicate hardware mapping detected: Chip {pin['chip']}, Line {pin['line']}")
+        seen_hardware.add(hw_key)
+
+        # Value checks
+        if pin["direction"].lower() not in valid_directions:
+            raise ValueError(f"Invalid direction for Pin {pin['num']}: {pin['direction']}")
+        if pin["bias"].lower() not in valid_biases:
+            raise ValueError(f"Invalid bias for Pin {pin['num']}: {pin['bias']}")
+
+    return True
+
+def release_gpios():
+    """Release all claimed GPIO lines and stop background tasks."""
+    logger.info("Releasing all GPIO lines...")
+    global interrupt_task
+    if interrupt_task:
+        interrupt_task.cancel()
+
+    for key, req in line_requests.items():
+        try:
+            req.release()
+            logger.debug(f"Released line {key}")
+        except Exception as e:
+            logger.error(f"Error releasing line {key}: {e}")
+
+    line_requests.clear()
+    pin_mapping.clear()
+    reverse_pin_mapping.clear()
+
 def init_gpios():
-    logger.info("Initialising GPIOs (v2 API - Input/Interrupt Mode)...")
+    """Initialise GPIOs based on config file."""
+    logger.info("Initialising GPIOs...")
     if not os.path.exists(CONFIG_FILE):
         logger.error(f"Error: {CONFIG_FILE} not found.")
         return
@@ -146,13 +238,18 @@ def init_gpios():
 
     for pin_cfg in config.get("pins", []):
         pin_num = pin_cfg.get("num")
+        direction_str = pin_cfg.get("direction", "output").lower()
+        if direction_str == "disabled":
+            logger.info(f"Pin {pin_num} is disabled, skipping hardware initialization.")
+            continue
+
         chip_num = pin_cfg.get("chip")
         line_offset = pin_cfg.get("line")
-        direction_str = pin_cfg.get("direction", "output").lower()
         bias_str = pin_cfg.get("bias", "none").lower()
         chip_path = f"/dev/gpiochip{chip_num}"
-        
+
         pin_mapping[pin_num] = (chip_path, line_offset)
+        reverse_pin_mapping[(chip_path, line_offset)] = pin_num
         
         # Mapping configuration
         dir_val = Direction.OUTPUT if direction_str == "output" else Direction.INPUT
@@ -189,31 +286,83 @@ def init_gpios():
             msg = f"Failed to request Pin {pin_num} ({direction_str}) on {chip_path}: {e}"
             logger.error(msg)
 
+async def monitor_task_health():
+    """Background task to monitor and restart failed background tasks."""
+    global interrupt_task, stats_task
+    logger.info("Task health monitor: Started")
+
+    while True:
+        try:
+            await asyncio.sleep(TASK_HEALTH_CHECK_INTERVAL_SEC)
+
+            # Check interrupt monitor
+            if interrupt_task is None or interrupt_task.done():
+                if interrupt_task and interrupt_task.done():
+                    exc = interrupt_task.exception() if not interrupt_task.cancelled() else None
+                    if exc:
+                        logger.error(f"Interrupt monitor crashed with: {exc}")
+                    else:
+                        logger.warning("Interrupt monitor stopped unexpectedly")
+                logger.info("Restarting interrupt monitor...")
+                interrupt_task = asyncio.create_task(monitor_interrupts())
+
+            # Check stats monitor
+            if stats_task is None or stats_task.done():
+                if stats_task and stats_task.done():
+                    exc = stats_task.exception() if not stats_task.cancelled() else None
+                    if exc:
+                        logger.error(f"Stats monitor crashed with: {exc}")
+                    else:
+                        logger.warning("Stats monitor stopped unexpectedly")
+                logger.info("Restarting stats monitor...")
+                stats_task = asyncio.create_task(monitor_stats())
+
+        except asyncio.CancelledError:
+            logger.info("Task health monitor: Cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Task health monitor error: {e}", exc_info=True)
+            await asyncio.sleep(5)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global interrupt_task, stats_task
+    global interrupt_task, stats_task, task_monitor_task
     # Startup
+    logger.info("Starting LoxIO Core API...")
     init_gpios()
     interrupt_task = asyncio.create_task(monitor_interrupts())
     stats_task = asyncio.create_task(monitor_stats())
+    task_monitor_task = asyncio.create_task(monitor_task_health())
+    logger.info("All background tasks started")
     yield
     # Shutdown
-    logger.info("Cleaning up system...")
-    if interrupt_task:
-        interrupt_task.cancel()
-    if stats_task:
-        stats_task.cancel()
-    
+    logger.info("Shutting down LoxIO Core API...")
+
+    # Cancel all background tasks
+    tasks_to_cancel = [interrupt_task, stats_task, task_monitor_task]
+    for task in tasks_to_cancel:
+        if task:
+            task.cancel()
+
+    # Wait for all tasks to complete
     try:
-        await asyncio.gather(interrupt_task, stats_task, return_exceptions=True)
+        await asyncio.gather(*[t for t in tasks_to_cancel if t], return_exceptions=True)
     except asyncio.CancelledError:
         pass
-    for req in line_requests.values():
+
+    # Release GPIO resources
+    for key, req in line_requests.items():
         try:
             req.release()
-        except:
-            pass
+            logger.debug(f"Released line {key}")
+        except Exception as e:
+            logger.warning(f"Error releasing line {key}: {e}")
+
     line_requests.clear()
+    pin_mapping.clear()
+    reverse_pin_mapping.clear()
+    logger.info("Cleanup complete")
 
 app = FastAPI(
     title="LoxIO Core API",
@@ -251,7 +400,7 @@ app.mount("/static", StaticFiles(directory=APP_DIR), name="static")
 @app.get("/")
 async def root():
     return {
-        "message": "Orange Pi GPIO API with Input/Interrupt Support",
+        "message": "LoxIO Core API with Input/Interrupt Support",
         "active_pins": list(pin_mapping.keys())
     }
 
@@ -276,7 +425,8 @@ def get_system_info():
                     if line.startswith("BOARD_NAME="):
                         info["board"] = line.split("=")[1].strip().strip('"')
                         break
-        except: pass
+        except (IOError, IndexError) as e:
+            logger.debug(f"Could not read board info: {e}")
 
     # OS Info
     if os.path.exists("/etc/os-release"):
@@ -286,7 +436,8 @@ def get_system_info():
                     if line.startswith("PRETTY_NAME="):
                         info["os"] = line.split("=")[1].strip().strip('"')
                         break
-        except: pass
+        except (IOError, IndexError) as e:
+            logger.debug(f"Could not read OS info: {e}")
 
     # Uptime
     if os.path.exists("/proc/uptime"):
@@ -294,14 +445,16 @@ def get_system_info():
             with open("/proc/uptime", "r") as f:
                 uptime_seconds = float(f.readline().split()[0])
                 info["uptime"] = str(timedelta(seconds=int(uptime_seconds)))
-        except: pass
+        except (IOError, ValueError, IndexError) as e:
+            logger.debug(f"Could not read uptime: {e}")
 
     # Load Average
     if os.path.exists("/proc/loadavg"):
         try:
             with open("/proc/loadavg", "r") as f:
                 info["load_avg"] = [float(x) for x in f.read().split()[:3]]
-        except: pass
+        except (IOError, ValueError) as e:
+            logger.debug(f"Could not read load average: {e}")
 
     # RAM Usage
     if os.path.exists("/proc/meminfo"):
@@ -324,7 +477,8 @@ def get_system_info():
                 "available_mb": round(available / 1024, 1),
                 "percent": round(100 * (1 - available / total), 1) if total > 0 else 0
             }
-        except: pass
+        except (IOError, ValueError, ZeroDivisionError) as e:
+            logger.debug(f"Could not read memory info: {e}")
 
     return info
 
@@ -336,7 +490,8 @@ async def health():
         if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
             with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                 cpu_temp = int(f.read().strip()) / 1000.0
-    except: pass
+    except (IOError, ValueError) as e:
+        logger.debug(f"Could not read CPU temperature: {e}")
 
     sys_info = get_system_info()
 
@@ -375,6 +530,9 @@ async def get_status():
     with open(CONFIG_FILE, "r") as f:
         config = json.load(f)
     for pin_cfg in config["pins"]:
+        if pin_cfg.get("direction") == "disabled":
+            continue
+            
         pin_num = pin_cfg["num"]
         mapping = pin_mapping.get(pin_num)
         current_val = -1
@@ -386,7 +544,7 @@ async def get_status():
                 val = line_requests[mapping].get_value(mapping[1])
                 current_val = 1 if val == Value.ACTIVE else 0
             except Exception as e:
-                pass
+                logger.debug(f"Could not read value for pin {pin_num}: {e}")
         
         status.append({
             **pin_cfg,
@@ -405,19 +563,28 @@ async def get_events():
 
 @app.post("/pins/set")
 async def set_pin(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
     try:
         # Loxone sends Content-Type: text/plain, which FastAPI rejects for Pydantic models.
         # We manually parse the body to support this behavior.
         body_bytes = await request.body()
         if not body_bytes:
-             raise HTTPException(status_code=400, detail="Empty body")
-             
+            logger.warning(f"Empty request body from {client_ip} on /pins/set")
+            raise HTTPException(status_code=400, detail="Empty body")
+
         try:
             body_json = json.loads(body_bytes)
             data = PinState(**body_json)
-        except json.JSONDecodeError:
-             raise HTTPException(status_code=422, detail="Invalid JSON format")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON from {client_ip} on /pins/set: {e}")
+            raise HTTPException(status_code=422, detail="Invalid JSON format")
+        except Exception as e:
+            logger.warning(f"Validation error from {client_ip} on /pins/set: {e}")
+            raise HTTPException(status_code=422, detail=f"Validation error: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Unexpected error parsing request from {client_ip}: {e}")
         raise HTTPException(status_code=422, detail=f"Unprocessable Entity: {str(e)}")
 
     mapping = pin_mapping.get(data.pin_num)
@@ -482,7 +649,8 @@ async def get_loxone_status():
             try:
                 val = line_requests[mapping].get_value(mapping[1])
                 current_val = 1 if val == Value.ACTIVE else 0
-            except: pass
+            except Exception as e:
+                logger.debug(f"Could not read value for pin {pin_num} in loxone/status: {e}")
         
         output.append(f"Pin {pin_num}={current_val}")
     
@@ -499,7 +667,8 @@ async def get_loxone_stats():
         if os.path.exists("/sys/class/thermal/thermal_zone0/temp"):
             with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
                 cpu_temp = int(f.read().strip()) / 1000.0
-    except: pass
+    except (IOError, ValueError) as e:
+        logger.debug(f"Could not read CPU temperature for loxone/stats: {e}")
 
     # Format specifically for Loxone Virtual Input parsing (Key=Value)
     output = [
@@ -519,7 +688,8 @@ async def get_loxone_stats():
             with open("/proc/uptime", "r") as f:
                 uptime_seconds = float(f.readline().split()[0])
                 uptime_hours = round(uptime_seconds / 3600.0, 2)
-        except: pass
+        except (IOError, ValueError, IndexError) as e:
+            logger.debug(f"Could not read uptime for loxone/stats: {e}")
     output.append(f"UptimeHours={uptime_hours}")
 
     return "\n".join(output)
@@ -531,7 +701,8 @@ def get_ip_address():
         ip = s.getsockname()[0]
         s.close()
         return ip
-    except:
+    except (OSError, socket.error) as e:
+        logger.debug(f"Could not determine IP address: {e}")
         return "127.0.0.1"
 
 @app.get("/loxone/template/inputs", response_class=Response)
@@ -563,16 +734,18 @@ async def get_loxone_input_template():
             pin_num = pin_cfg["num"]
             name = pin_cfg.get("name", str(pin_num))
             
-            # Using the standard attributes from the user's weather example, adapted for digital pins
+            # Use Analog="false" for standard digital inputs to appear correctly in Loxone
             xml_lines.append(
                 f'  <VirtualInHttpCmd Title="Pin {pin_num} ({name})" Comment="" Check="Pin {pin_num}=\\v" '
-                f'Signed="true" Analog="true" SourceValLow="0" DestValLow="0" SourceValHigh="1" DestValHigh="1" '
+                f'Signed="true" Analog="false" SourceValLow="0" DestValLow="0" SourceValHigh="1" DestValHigh="1" '
                 f'DefVal="0" MinVal="0" MaxVal="1" Unit="" HintText=""/>'
             )
 
     xml_lines.append('</VirtualInHttp>')
+    # Adding UTF-8 BOM (\ufeff) for Loxone Config compatibility on Windows
+    xml_content = "\ufeff" + "\n".join(xml_lines)
     
-    return Response(content="\n".join(xml_lines), media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Inputs.xml"'})
+    return Response(content=xml_content, media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Inputs.xml"'})
 
 @app.get("/loxone/template/outputs", response_class=Response)
 async def get_loxone_output_template():
@@ -586,11 +759,6 @@ async def get_loxone_output_template():
     except:
         raise HTTPException(500, "Config error")
 
-    # Structure based on user provided working example
-    # Note: Loxone Config imports usually require utf-8 BOM or specific structure.
-    # The user provided a single <VirtualOut> block. For template import, it usually needs to be wrapped.
-    # We will wrap it in a root element but keep the internal structure exactly as requested.
-    
     xml_lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
         f'<VirtualOut Title="LoxIO_Core_Outputs ({ip_addr})" Comment="RS Soft LoxIO Core" Address="{base_url}" HintText=""'
@@ -599,25 +767,12 @@ async def get_loxone_output_template():
     ]
 
     for pin_cfg in config["pins"]:
-        # Only include pins configured as output
         if pin_cfg.get("direction", "output").lower() == "output":
             pin_num = pin_cfg["num"]
             name = pin_cfg.get("name", str(pin_num))
             
-            # Using POST for our API, adapting the user's GET example to our POST endpoints
-            # CmdOn/CmdOff in user example are logic inverted (off/on -> off/on)
-            # We map: Loxone ON -> API High (1), Loxone OFF -> API Low (0)
-            
-            # Since Loxone VirtualOutCmd attributes for POST are specific:
-            # CmdOn: URL path, CmdOnPost: Body data
-            
             on_body = json.dumps({"pin_num": pin_num, "state": 1}).replace('"', '&quot;')
             off_body = json.dumps({"pin_num": pin_num, "state": 0}).replace('"', '&quot;')
-            
-            # Using Method="POST" (Standard Loxone attribute for HTTP Method is explicitly supported in newer versions, 
-            # or implicitly via CmdOn/CmdOnPost). 
-            # The user's example used GET. To support POST properly with this legacy-style XML:
-            # CmdOnMethod="POST"
             
             xml_lines.append(
                 f'  <VirtualOutCmd Title="Pin {pin_num} ({name})" Comment="" '
@@ -629,7 +784,10 @@ async def get_loxone_output_template():
 
     xml_lines.append('</VirtualOut>')
     
-    return Response(content="\n".join(xml_lines), media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Outputs.xml"'})
+    # Adding UTF-8 BOM (\ufeff)
+    xml_content = "\ufeff" + "\n".join(xml_lines)
+    
+    return Response(content=xml_content, media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Outputs.xml"'})
 
 @app.get("/loxone/template/stats", response_class=Response)
 async def get_loxone_stats_template():
@@ -656,9 +814,10 @@ async def get_loxone_stats_template():
     add_cmd("RAM Usage", "RamPercent", "%")
     add_cmd("Uptime", "UptimeHours", "h")
 
-    xml_lines.append('</VirtualInHttp>')
+    # Adding UTF-8 BOM (\ufeff)
+    xml_content = "\ufeff" + "\n".join(xml_lines)
     
-    return Response(content="\n".join(xml_lines), media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Stats.xml"'})
+    return Response(content=xml_content, media_type="application/xml", headers={"Content-Disposition": 'attachment; filename="LoxIO_Stats.xml"'})
 
 @app.get("/update/check")
 async def check_update():
@@ -678,12 +837,14 @@ async def check_update():
             "remote_hash": remote_hash
         }
     except Exception as e:
+        logger.warning(f"Update check failed: {e}")
         local_hash = "Unknown"
         try:
             local_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=APP_DIR, text=True).strip()
-        except: pass
+        except subprocess.CalledProcessError as git_err:
+            logger.debug(f"Could not get local git hash: {git_err}")
         return {
-            "error": str(e), 
+            "error": str(e),
             "update_available": False,
             "local_hash": local_hash
         }
@@ -953,6 +1114,46 @@ async def system_shutdown():
         return {"status": "success", "message": "Shutdown sequence initiated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/config")
+async def get_config():
+    """Retrieve the current GPIO configuration."""
+    if not os.path.exists(CONFIG_FILE):
+         raise HTTPException(status_code=404, detail="Config file missing")
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/config/update")
+async def update_config(config: Dict):
+    """Update the GPIO configuration and reload hardware."""
+    try:
+        # Validate configuration before applying
+        try:
+            validate_gpio_config(config)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        # Save to file
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config, f, indent=2)
+        
+        logger.info("Configuration updated via API. Reloading hardware...")
+        
+        # Hot-reload GPIOs
+        release_gpios()
+        init_gpios()
+        
+        # Restart interrupt task
+        global interrupt_task
+        interrupt_task = asyncio.create_task(monitor_interrupts())
+        
+        return {"status": "success", "message": "Configuration updated and hardware reloaded"}
+    except Exception as e:
+        logger.error(f"Config update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

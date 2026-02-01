@@ -1,24 +1,43 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import requests
 import os
+import logging
 
 app = Flask(__name__)
 
-# The GPIO API base URL
-API_BASE_URL = os.environ.get("GPIO_API_URL", "http://192.168.1.29:8000")
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("LoxIO-Web")
+
+# The GPIO API base URL - defaults to localhost for same-device deployment
+API_BASE_URL = os.environ.get("GPIO_API_URL", "http://localhost:8000")
 
 def api_get(endpoint):
     try:
         response = requests.get(f"{API_BASE_URL}{endpoint}", timeout=10)
         return response.json()
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"API connection failed for GET {endpoint}: {e}")
+        return {"error": "API unavailable - connection refused"}
+    except requests.exceptions.Timeout as e:
+        logger.warning(f"API timeout for GET {endpoint}: {e}")
+        return {"error": "API request timed out"}
     except Exception as e:
+        logger.error(f"Unexpected error for GET {endpoint}: {e}")
         return {"error": str(e)}
 
 def api_post(endpoint, data=None):
     try:
         response = requests.post(f"{API_BASE_URL}{endpoint}", json=data, timeout=10)
         return response.json()
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"API connection failed for POST {endpoint}: {e}")
+        return {"error": "API unavailable - connection refused"}
+    except requests.exceptions.Timeout as e:
+        logger.warning(f"API timeout for POST {endpoint}: {e}")
+        return {"error": "API request timed out"}
     except Exception as e:
+        logger.error(f"Unexpected error for POST {endpoint}: {e}")
         return {"error": str(e)}
 
 @app.route('/')
@@ -69,6 +88,13 @@ def system_page():
     if "error" in update_info:
         update_info = {"local_hash": "Unknown", "update_available": False, "error": True}
     return render_template('system.html', health=health, update_info=update_info)
+
+@app.route('/settings')
+def settings_page():
+    config = api_get("/config")
+    if "error" in config:
+        config = {"pins": []}
+    return render_template('settings.html', config=config)
 
 # API Proxies for AJAX calls
 @app.route('/api/pins/toggle/<int:pin_num>', methods=['POST'])
@@ -157,5 +183,12 @@ def get_logs():
     except Exception as e:
         return jsonify({"logs": [f"Error fetching logs: {str(e)}"]})
 
+@app.route('/api/config/update', methods=['POST'])
+def update_config():
+    data = request.json
+    return jsonify(api_post("/config/update", data))
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() in ("true", "1", "yes")
+    port = int(os.environ.get("FLASK_PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)

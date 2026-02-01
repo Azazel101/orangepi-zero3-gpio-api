@@ -129,7 +129,9 @@ def get_stats_history():
 
 @app.route('/api/update/ota', methods=['POST'])
 def trigger_update():
-    return jsonify(api_post("/update/ota"))
+    force = request.args.get('force', 'false').lower() == 'true'
+    endpoint = "/update/ota?force=true" if force else "/update/ota"
+    return jsonify(api_post(endpoint))
 
 @app.route('/api/system/reboot', methods=['POST'])
 def trigger_reboot():

@@ -24,9 +24,14 @@
             <p style="color: var(--text-dim); margin-top: 0.5rem;">Your software is up to date.</p>
             {% endif %}
         </div>
-        <button onclick="triggerUpdate()" id="update-btn" {{ 'disabled' if not update_info.update_available }}>
-            Update Now
-        </button>
+        <div style="display: flex; gap: 0.5rem;">
+            <button onclick="triggerUpdate(false)" id="update-btn" {{ 'disabled' if not update_info.update_available }}>
+                Update Now
+            </button>
+            <button onclick="triggerUpdate(true)" id="force-update-btn" class="secondary">
+                <i class="fas fa-bolt"></i> Force Update
+            </button>
+        </div>
     </div>
 
     <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
@@ -100,21 +105,32 @@
 </div>
 
 <script>
-    async function triggerUpdate() {
-        if (!confirm("Are you sure you want to update? The system will restart.")) return;
+    async function triggerUpdate(force = false) {
+        const msg = force
+            ? "Are you sure you want to FORCE update? This will re-download and reinstall even if up to date."
+            : "Are you sure you want to update? The system will restart.";
+        if (!confirm(msg)) return;
 
-        const btn = document.getElementById('update-btn');
+        const btn = force ? document.getElementById('force-update-btn') : document.getElementById('update-btn');
+        const originalText = btn.innerText;
         btn.disabled = true;
         btn.innerText = "Updating...";
 
         try {
-            const response = await fetch('/api/update/ota', { method: 'POST' });
+            const url = force ? '/api/update/ota?force=true' : '/api/update/ota';
+            const response = await fetch(url, { method: 'POST' });
             const result = await response.json();
-            alert("Update initiated. The system will be back in about 60 seconds.");
+            if (result.error) {
+                alert("Update failed: " + result.error);
+                btn.disabled = false;
+                btn.innerText = originalText;
+            } else {
+                alert("Update initiated. The system will be back in about 60 seconds.");
+            }
         } catch (e) {
             alert("Update trigger failed.");
             btn.disabled = false;
-            btn.innerText = "Update Now";
+            btn.innerText = originalText;
         }
     }
 

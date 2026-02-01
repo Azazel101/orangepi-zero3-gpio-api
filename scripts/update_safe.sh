@@ -72,11 +72,18 @@ fi
 NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 log "Updated to commit: $NEW_COMMIT"
 
-# 5. Restart services
-log "Restarting service $SERVICE..."
-systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
-log "Restarting service $WEB_SERVICE..."
-systemctl restart "$WEB_SERVICE" || log "Warning: Failed to restart $WEB_SERVICE"
+# 5. Restart services (run in background to avoid being killed when API restarts)
+log "Restarting services..."
+(
+    systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
+    log "Service $SERVICE restarted"
+    systemctl restart "$WEB_SERVICE" || log "Warning: Failed to restart $WEB_SERVICE"
+    log "Service $WEB_SERVICE restarted"
+) &
+RESTART_PID=$!
+
+# Wait for restarts to complete
+sleep 3
 
 # 6. Verify health with exponential backoff
 log "Verifying service health..."

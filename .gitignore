@@ -2,5 +2,9 @@ venv/
 __pycache__/
 *.pyc
 app.log
+app.log.*
 .DS_Store
 .env
+
+# User config - preserved during updates (use gpio_config.default.json as template)
+gpio_config.json

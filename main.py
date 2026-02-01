@@ -43,6 +43,7 @@ pin_mapping = {}
 reverse_pin_mapping = {}
 
 CONFIG_FILE = "gpio_config.json"
+DEFAULT_CONFIG_FILE = "gpio_config.default.json"  # Template config (tracked in git)
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_DIR = os.path.join(APP_DIR, "scripts")
 LOG_FILE = os.path.join(APP_DIR, "app.log")
@@ -222,9 +223,29 @@ def release_gpios():
     pin_mapping.clear()
     reverse_pin_mapping.clear()
 
+def ensure_config_exists():
+    """Ensure user config exists, copy from default template if missing."""
+    config_path = os.path.join(APP_DIR, CONFIG_FILE)
+    default_path = os.path.join(APP_DIR, DEFAULT_CONFIG_FILE)
+
+    if not os.path.exists(config_path):
+        if os.path.exists(default_path):
+            logger.info(f"User config not found, copying from {DEFAULT_CONFIG_FILE}")
+            shutil.copy(default_path, config_path)
+        else:
+            logger.error(f"Neither {CONFIG_FILE} nor {DEFAULT_CONFIG_FILE} found!")
+            return False
+    return True
+
+
 def init_gpios():
     """Initialise GPIOs based on config file."""
     logger.info("Initialising GPIOs...")
+
+    # Ensure config file exists (copy from default if needed)
+    if not ensure_config_exists():
+        return
+
     if not os.path.exists(CONFIG_FILE):
         logger.error(f"Error: {CONFIG_FILE} not found.")
         return

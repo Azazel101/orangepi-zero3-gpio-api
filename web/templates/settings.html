@@ -1,6 +1,34 @@
 {% extends 'layout.html' %}
 
 {% block content %}
+<!-- Hardware Pinout Reference -->
+<div class="card animate-fade" style="margin-bottom: 1.5rem;">
+    <div class="card-title">
+        <i class="fas fa-microchip"></i>
+        Hardware Pinout
+    </div>
+    <div>
+        <p style="margin-bottom: 1rem; opacity: 0.8;">
+            Orange Pi Zero 3 GPIO header reference. Click image to enlarge.
+        </p>
+        <div style="text-align: center;">
+            <img src="{{ url_for('static', filename='img/pinout.png') }}"
+                 alt="Orange Pi Zero 3 Pinout"
+                 id="pinout-img"
+                 style="max-width: 100%; height: auto; border-radius: 8px; cursor: zoom-in; border: 1px solid var(--border-color);"
+                 onclick="openPinoutModal()">
+        </div>
+    </div>
+</div>
+
+<!-- Pinout Modal -->
+<div id="pinout-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; cursor: zoom-out;" onclick="closePinoutModal()">
+    <img src="{{ url_for('static', filename='img/pinout.png') }}"
+         alt="Orange Pi Zero 3 Pinout"
+         style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 95%; max-height: 95%; border-radius: 8px;">
+    <span style="position: absolute; top: 20px; right: 30px; color: white; font-size: 2rem; cursor: pointer;">&times;</span>
+</div>
+
 <div class="card animate-fade">
     <div class="card-title">
         <i class="fas fa-cog"></i>
@@ -66,6 +94,22 @@
 </div>
 
 <script>
+    // Pinout modal functions
+    function openPinoutModal() {
+        document.getElementById('pinout-modal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePinoutModal() {
+        document.getElementById('pinout-modal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closePinoutModal();
+    });
+
     document.getElementById('config-form').addEventListener('submit', async (e) => {
         e.preventDefault();
 

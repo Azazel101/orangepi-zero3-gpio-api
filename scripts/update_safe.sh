@@ -75,7 +75,8 @@ log "Updated to commit: $NEW_COMMIT"
 # 5. Restart services
 log "Restarting service $SERVICE..."
 systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
-systemctl restart "$WEB_SERVICE" 2>/dev/null || true
+log "Restarting service $WEB_SERVICE..."
+systemctl restart "$WEB_SERVICE" || log "Warning: Failed to restart $WEB_SERVICE"
 
 # 6. Verify health with exponential backoff
 log "Verifying service health..."
@@ -91,8 +92,8 @@ log "Rolling back to $COMMIT_BEFORE..."
 
 if git reset --hard "$COMMIT_BEFORE" 2>&1; then
     log "Rollback applied, restarting services..."
-    systemctl restart "$SERVICE" || true
-    systemctl restart "$WEB_SERVICE" 2>/dev/null || true
+    systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
+    systemctl restart "$WEB_SERVICE" || log "Warning: Failed to restart $WEB_SERVICE"
 
     # Verify rollback
     sleep 5

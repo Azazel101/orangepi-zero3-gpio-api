@@ -1,0 +1,114 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card animate-fade">
+    <div class="card-title">
+        <i class="fas fa-cog"></i>
+        Hardware Settings
+    </div>
+    <p style="margin-bottom: 2rem; opacity: 0.8;">Configure pin directions, names, and internal biases.
+        <strong>Warning:</strong> Incorrect configuration can damage hardware if connected improperly.
+    </p>
+
+    <form id="config-form">
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 2rem;">
+                <thead>
+                    <tr style="text-align: left; border-bottom: 2px solid var(--border-color);">
+                        <th style="padding: 1rem;">Pin #</th>
+                        <th style="padding: 1rem;">Label / Name</th>
+                        <th style="padding: 1rem;">Direction</th>
+                        <th style="padding: 1rem;">Bias (Resistor)</th>
+                        <th style="padding: 1rem;">Hardware Mapping</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pin in config.pins %}
+                    <tr class="pin-row" data-num="{{ pin.num }}" data-chip="{{ pin.chip }}" data-line="{{ pin.line }}">
+                        <td style="padding: 1rem; font-weight: 600;">{{ pin.num }}</td>
+                        <td style="padding: 1rem;">
+                            <input type="text" class="pin-name" value="{{ pin.name }}" style="padding: 0.5rem;">
+                        </td>
+                        <td style="padding: 1rem;">
+                            <select class="pin-direction" style="padding: 0.5rem;">
+                                <option value="input" {{ 'selected' if pin.direction=='input' }}>Input (Sensor/Button)
+                                </option>
+                                <option value="output" {{ 'selected' if pin.direction=='output' }}>Output (Relay/LED)
+                                </option>
+                                <option value="disabled" {{ 'selected' if pin.direction=='disabled' }}>Disabled (Release
+                                    Pin)</option>
+                            </select>
+                        </td>
+                        <td style="padding: 1rem;">
+                            <select class="pin-bias" style="padding: 0.5rem;">
+                                <option value="none" {{ 'selected' if pin.bias=='none' }}>None</option>
+                                <option value="pull-up" {{ 'selected' if pin.bias=='pull-up' }}>Pull-up</option>
+                                <option value="pull-down" {{ 'selected' if pin.bias=='pull-down' }}>Pull-down</option>
+                                <option value="disabled" {{ 'selected' if pin.bias=='disabled' }}>Disabled</option>
+                            </select>
+                        </td>
+                        <td style="padding: 1rem; opacity: 0.6; font-family: monospace; font-size: 0.8rem;">
+                            Chip {{ pin.chip }}, Line {{ pin.line }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem;">
+            <button type="submit" id="save-btn">
+                <i class="fas fa-save"></i> Save & Apply Config
+            </button>
+            <span id="save-status" style="font-size: 0.9rem; font-weight: 500;"></span>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const saveBtn = document.getElementById('save-btn');
+        const status = document.getElementById('save-status');
+
+        if (!confirm("Are you sure? This will immediately reload the hardware configuration.")) return;
+
+        saveBtn.disabled = true;
+        status.innerText = "Applying changes...";
+        status.style.color = "var(--text-main)";
+
+        const pinRows = document.querySelectorAll('.pin-row');
+        const pins = Array.from(pinRows).map(row => ({
+            num: parseInt(row.dataset.num),
+            chip: parseInt(row.dataset.chip),
+            line: parseInt(row.dataset.line),
+            name: row.querySelector('.pin-name').value,
+            direction: row.querySelector('.pin-direction').value,
+            bias: row.querySelector('.pin-bias').value
+        }));
+
+        try {
+            const response = await fetch('/api/config/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pins })
+            });
+            const result = await response.json();
+
+            if (result.status === 'success') {
+                status.innerText = "✓ Hardware reloaded successfully!";
+                status.style.color = "var(--loxio-green)";
+            } else {
+                status.innerText = "✗ Error: " + (result.message || "Update failed");
+                status.style.color = "var(--loxio-error)";
+            }
+        } catch (error) {
+            status.innerText = "✗ Network error";
+            status.style.color = "var(--loxio-error)";
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+</script>
+{% endblock %}

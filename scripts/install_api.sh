@@ -1,90 +1,121 @@
 #!/bin/bash
+set -euo pipefail
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (use sudo)"
-  exit 1
-fi
+# ============================================================================
+# LoxIO Core - API Installation Script
+# ============================================================================
 
 APP_DIR="/root/opi_gpio_app"
 SERVICE_FILE="opi_gpio.service"
+WEB_SERVICE_FILE="opi_web.service"
+GIT_REPO="https://github.com/Azazel101/orangepi-zero3-gpio-api.git"
 
-echo "--- Installing LoxIO Core API (by RS Soft) ---"
+log() {
+    echo "[$(date '+%H:%M:%S')] $1"
+}
+
+error() {
+    echo "[$(date '+%H:%M:%S')] ERROR: $1" >&2
+    exit 1
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    error "Please run as root (use sudo)"
+fi
+
+log "=== Installing LoxIO Core API (by RS Soft) ==="
 
 # 1. Install system dependencies
-echo "Installing system dependencies..."
-apt update
-apt install -y python3-venv libgpiod-dev gpiod git network-manager avahi-daemon
+log "Installing system dependencies..."
+apt update -o Acquire::http::Timeout=30 || error "apt update failed"
+apt install -y python3-venv libgpiod-dev gpiod git network-manager avahi-daemon || error "apt install failed"
 
 # 2. Setup Virtual Environment
-echo "Setting up Python virtual environment..."
+log "Setting up Python virtual environment..."
 if [ ! -d "$APP_DIR/venv" ]; then
-    python3 -m venv "$APP_DIR/venv"
+    python3 -m venv "$APP_DIR/venv" || error "Failed to create virtual environment"
 fi
 
 # 3. Install Python requirements
-echo "Installing Python requirements..."
-"$APP_DIR/venv/bin/pip" install --upgrade pip
-"$APP_DIR/venv/bin/pip" install -r "$APP_DIR/requirements.txt"
-
-# 4. Install Systemd Service
-echo "Installing systemd service..."
-if [ -f "$APP_DIR/$SERVICE_FILE" ]; then
-    cp "$APP_DIR/$SERVICE_FILE" /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl enable "$SERVICE_FILE"
-    systemctl restart "$SERVICE_FILE"
-    echo "Service installed and started."
+log "Installing Python requirements..."
+"$APP_DIR/venv/bin/pip" install --upgrade pip --quiet || error "pip upgrade failed"
+if [ -f "$APP_DIR/requirements.txt" ]; then
+    "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/requirements.txt" --quiet || error "pip install failed"
 else
-    echo "Error: $SERVICE_FILE not found in $APP_DIR"
+    log "Warning: requirements.txt not found, skipping pip install"
 fi
 
+# 4. Install Systemd Services
+log "Installing systemd services..."
+if [ -f "$APP_DIR/$SERVICE_FILE" ]; then
+    cp "$APP_DIR/$SERVICE_FILE" /etc/systemd/system/
+    log "Installed $SERVICE_FILE"
+else
+    error "$SERVICE_FILE not found in $APP_DIR"
+fi
+
+if [ -f "$APP_DIR/$WEB_SERVICE_FILE" ]; then
+    cp "$APP_DIR/$WEB_SERVICE_FILE" /etc/systemd/system/
+    log "Installed $WEB_SERVICE_FILE"
+fi
+
+systemctl daemon-reload
+systemctl enable "$SERVICE_FILE"
+systemctl restart "$SERVICE_FILE" || log "Warning: Service restart failed (may be first install)"
+
 # 5. Set permissions for scripts
-echo "Setting script permissions..."
-chmod +x "$APP_DIR"/scripts/*.sh "$APP_DIR"/scripts/*.exp
+log "Setting script permissions..."
+chmod +x "$APP_DIR"/scripts/*.sh 2>/dev/null || true
+chmod +x "$APP_DIR"/scripts/*.exp 2>/dev/null || true
 
 # 6. Ensure NetworkManager is running
-echo "Checking NetworkManager service..."
-systemctl enable NetworkManager
-systemctl restart NetworkManager
+log "Configuring NetworkManager..."
+systemctl enable NetworkManager || true
+systemctl restart NetworkManager || log "Warning: NetworkManager restart failed"
 
-# 7. Initialize Git for OTA (if not already a git repo)
-echo "Initializing Git for OTA updates..."
+# 7. Initialize Git for OTA
+log "Configuring Git for OTA updates..."
+cd "$APP_DIR" || error "Cannot change to $APP_DIR"
+
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
 if [ ! -d "$APP_DIR/.git" ]; then
-    cd "$APP_DIR"
-    git init
-    git remote add origin https://github.com/Azazel101/orangepi-zero3-gpio-api.git
-    git fetch --all
-    git reset --hard origin/main
-    echo "Git initialized and linked to origin/main"
+    git init || error "git init failed"
+    git remote add origin "$GIT_REPO" || true
+    timeout 60 git fetch --all || log "Warning: git fetch failed (offline?)"
+    git reset --hard origin/main 2>/dev/null || log "Warning: git reset failed"
+    log "Git initialized and linked to origin/main"
 else
-    # Ensure remote is clean
-    cd "$APP_DIR"
-    git config --global --add safe.directory "$APP_DIR"
-    current_remote=$(git remote get-url origin 2>/dev/null)
-    if [ "$current_remote" != "https://github.com/Azazel101/orangepi-zero3-gpio-api.git" ]; then
-        echo "Updating git remote..."
-        git remote remove origin
-        git remote add origin https://github.com/Azazel101/orangepi-zero3-gpio-api.git
+    current_remote=$(git remote get-url origin 2>/dev/null || echo "")
+    if [ "$current_remote" != "$GIT_REPO" ]; then
+        log "Updating git remote..."
+        git remote remove origin 2>/dev/null || true
+        git remote add origin "$GIT_REPO"
     fi
-     git fetch --all
+    timeout 60 git fetch --all 2>/dev/null || log "Warning: git fetch failed (offline?)"
 fi
 
 # 8. Set Unique Hostname based on ChipID
-echo "Setting unique hostname..."
+log "Checking for Sunxi ChipID..."
 if [ -f "/sys/class/sunxi_info/sys_info" ]; then
-    CHIP_ID=$(grep "sunxi_chipid" /sys/class/sunxi_info/sys_info | awk '{print $3}')
-    if [ ! -z "$CHIP_ID" ]; then
+    CHIP_ID=$(grep "sunxi_chipid" /sys/class/sunxi_info/sys_info 2>/dev/null | awk '{print $3}' || echo "")
+    if [ -n "$CHIP_ID" ]; then
         UNIQUE_ID=$(echo -n "$CHIP_ID" | md5sum | cut -c1-10 | tr '[:lower:]' '[:upper:]')
         NEW_HOSTNAME="LoxIO-$UNIQUE_ID"
-        hostnamectl set-hostname "$NEW_HOSTNAME"
-        sed -i "s/127.0.1.1.*/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts
-        echo "Hostname updated to $NEW_HOSTNAME"
+        hostnamectl set-hostname "$NEW_HOSTNAME" || log "Warning: hostnamectl failed"
+        # Backup hosts file before modification
+        cp /etc/hosts /etc/hosts.bak
+        sed -i "s/127.0.1.1.*/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts || cp /etc/hosts.bak /etc/hosts
+        log "Hostname updated to $NEW_HOSTNAME"
     fi
+else
+    log "Not running on Sunxi hardware, skipping hostname setup"
 fi
 
 # 9. Setup mDNS (Avahi)
-echo "Configuring mDNS..."
+log "Configuring mDNS..."
+mkdir -p /etc/avahi/services
 cat <<EOF > /etc/avahi/services/opi-gpio.service
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -97,10 +128,12 @@ cat <<EOF > /etc/avahi/services/opi-gpio.service
 </service-group>
 EOF
 
-systemctl enable avahi-daemon
-systemctl restart avahi-daemon
+systemctl enable avahi-daemon || true
+systemctl restart avahi-daemon || log "Warning: avahi-daemon restart failed"
 
-echo "--- Installation Complete ---"
-echo "You can check status with: systemctl status $SERVICE_FILE"
-echo "API is running on: http://$(hostname -I | awk '{print $1}'):8000"
-echo "mDNS Hostname: http://$(hostname).local:8000"
+# Final status
+log "=== Installation Complete ==="
+log "Check status: systemctl status $SERVICE_FILE"
+IP_ADDR=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+log "API running at: http://${IP_ADDR}:8000"
+log "mDNS: http://$(hostname).local:8000"

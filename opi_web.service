@@ -1,17 +1,17 @@
 [Unit]
-Description=LoxIO Core API Service
+Description=LoxIO Core Web UI
 Documentation=https://github.com/Azazel101/orangepi-zero3-gpio-api
-After=network.target network-online.target
-Wants=network-online.target
+After=network.target opi_gpio.service
+Wants=opi_gpio.service
 
 [Service]
 Type=simple
 User=root
 Group=root
-WorkingDirectory=/root/opi_gpio_app
+WorkingDirectory=/root/opi_gpio_app/web
 
 # Startup
-ExecStart=/root/opi_gpio_app/venv/bin/python3 main.py
+ExecStart=/usr/bin/python3 app.py
 
 # Restart policy with backoff
 Restart=on-failure
@@ -19,23 +19,23 @@ RestartSec=5
 RestartMaxDelaySec=60
 
 # Timeout protection
-TimeoutStartSec=30
-TimeoutStopSec=15
+TimeoutStartSec=20
+TimeoutStopSec=10
 KillMode=mixed
 KillSignal=SIGTERM
 
 # Resource limits
-MemoryMax=512M
-TasksMax=256
+MemoryMax=256M
+TasksMax=128
 
-# Security hardening (compatible with GPIO access)
+# Security hardening
 PrivateTmp=yes
 NoNewPrivileges=yes
 
 # Logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=loxio-api
+SyslogIdentifier=loxio-web
 
 [Install]
 WantedBy=multi-user.target

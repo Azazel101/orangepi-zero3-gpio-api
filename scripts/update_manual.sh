@@ -1,93 +1,127 @@
 #!/bin/bash
+set -euo pipefail
 
-ZIP_FILE=$1
+# ============================================================================
+# LoxIO Core - Manual ZIP Update Script
+# ============================================================================
+
 APP_DIR="/root/opi_gpio_app"
-EXTRACT_DIR="/tmp/opi_update_extract"
 LOG_FILE="$APP_DIR/app.log"
 SERVICE="opi_gpio.service"
 HEALTH_URL="http://127.0.0.1:8000/health"
 
+# Create secure temp directory (not world-readable)
+EXTRACT_DIR=$(mktemp -d -t loxio_update.XXXXXX)
+chmod 700 "$EXTRACT_DIR"
+
+# Cleanup function
+cleanup() {
+    rm -rf "$EXTRACT_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT
+
 log() {
-    echo "$(date): $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG_FILE"
+    echo "$1"
 }
 
-if [ -z "$ZIP_FILE" ] || [ ! -f "$ZIP_FILE" ]; then
-    log "Manual Update: ZIP file not found or not provided."
+# Exponential backoff health check
+wait_for_healthy() {
+    local max_attempts=10
+    local delay=2
+    local max_delay=32
+
+    for ((i=1; i<=max_attempts; i++)); do
+        if curl -sf -m 5 "$HEALTH_URL" | grep -q "healthy"; then
+            return 0
+        fi
+        log "Health check $i/$max_attempts: Service not ready, waiting ${delay}s..."
+        sleep $delay
+        # Exponential backoff with max
+        delay=$((delay * 2))
+        if [ $delay -gt $max_delay ]; then
+            delay=$max_delay
+        fi
+    done
+    return 1
+}
+
+# Validate arguments
+ZIP_FILE="${1:-}"
+if [ -z "$ZIP_FILE" ]; then
+    log "Error: ZIP file path not provided"
+    echo "Usage: $0 <path_to_zip_file>"
+    exit 1
+fi
+
+if [ ! -f "$ZIP_FILE" ]; then
+    log "Error: ZIP file not found: $ZIP_FILE"
+    exit 1
+fi
+
+# Validate ZIP file (basic integrity check)
+if ! unzip -tq "$ZIP_FILE" > /dev/null 2>&1; then
+    log "Error: ZIP file is corrupted or invalid"
     exit 1
 fi
 
 log "--- Starting LoxIO Core Manual ZIP Update ---"
 log "Source: $ZIP_FILE"
+log "Temp dir: $EXTRACT_DIR"
 
-# 1. Clean and Prepare Extract Dir
-rm -rf "$EXTRACT_DIR"
-mkdir -p "$EXTRACT_DIR"
-
-# 2. Extract
-unzip -q "$ZIP_FILE" -d "$EXTRACT_DIR"
-if [ $? -ne 0 ]; then
-    log "Manual Update: ZIP Extraction failed!"
+# Extract ZIP
+log "Extracting ZIP file..."
+if ! unzip -q "$ZIP_FILE" -d "$EXTRACT_DIR"; then
+    log "Error: ZIP extraction failed"
     exit 1
 fi
 
-# 3. Find the app root (GitHub zips have a subdir)
-# We look for main.py inside the extract dir
-SUBDIR=$(find "$EXTRACT_DIR" -maxdepth 2 -name "main.py" -exec dirname {} \;)
+# Find the app root (GitHub zips have a subdir)
+SUBDIR=$(find "$EXTRACT_DIR" -maxdepth 2 -name "main.py" -exec dirname {} \; | head -n1)
 
 if [ -z "$SUBDIR" ]; then
-    log "Manual Update: Could not find application root in ZIP (missing main.py)."
+    log "Error: Could not find application root in ZIP (missing main.py)"
     exit 1
 fi
 
 log "Found application root at: $SUBDIR"
 
-# 4. Backup current config if it exists
-# We want to preserve gpio_config.json
+# Backup current config with secure permissions
+CONFIG_BACKUP=""
 if [ -f "$APP_DIR/gpio_config.json" ]; then
-    cp "$APP_DIR/gpio_config.json" "/tmp/gpio_config.json.bak"
-    log "Preserving existing GPIO config."
+    CONFIG_BACKUP=$(mktemp -t gpio_config.XXXXXX)
+    chmod 600 "$CONFIG_BACKUP"
+    cp "$APP_DIR/gpio_config.json" "$CONFIG_BACKUP"
+    log "Preserved existing GPIO config"
 fi
 
-# 5. Overwrite APP_DIR contents
+# Update application files
 log "Updating application files..."
-# Delete everything except .git and logs and venv to keep it clean but functional
-# Actually, better to just copy over.
-cp -r "$SUBDIR"/* "$APP_DIR/"
+cp -a "$SUBDIR"/* "$APP_DIR/"
 
 # Restore config
-if [ -f "/tmp/gpio_config.json.bak" ]; then
-    cp "/tmp/gpio_config.json.bak" "$APP_DIR/gpio_config.json"
+if [ -n "$CONFIG_BACKUP" ] && [ -f "$CONFIG_BACKUP" ]; then
+    cp "$CONFIG_BACKUP" "$APP_DIR/gpio_config.json"
+    rm -f "$CONFIG_BACKUP"
+    log "Restored GPIO config"
 fi
 
-# 6. Restart Service
-log "Restarting service $SERVICE..."
-systemctl restart "$SERVICE"
-systemctl restart opi_web.service
+# Restart services
+log "Restarting services..."
+systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
+systemctl restart opi_web.service || log "Warning: Failed to restart opi_web.service"
 
-# 7. Watchdog Verify
-log "Waiting for service to become healthy..."
-MAX_RETRIES=20
-SUCCESS=0
+# Verify health with exponential backoff
+log "Verifying service health..."
+if wait_for_healthy; then
+    log "SUCCESS: Manual update completed, system is healthy"
 
-for i in $(seq 1 $MAX_RETRIES); do
-    sleep 2
-    if curl -s "$HEALTH_URL" | grep -q "healthy"; then
-        SUCCESS=1
-        break
-    fi
-    log "Check $i/$MAX_RETRIES: Service not ready yet..."
-done
-
-if [ $SUCCESS -eq 1 ]; then
-    log "Manual Update Verified! System is healthy."
+    # Cleanup source ZIP on success
+    rm -f "$ZIP_FILE" 2>/dev/null || true
 else
-    log "CRITICAL: Manual Update FAILED! API not responding."
-    # Since we don't have a git hash here easily to rollback, 
-    # we just log failure. Manual intervention might be needed.
+    log "CRITICAL: Manual update FAILED - API not responding"
+    log "Manual intervention may be required"
     exit 1
 fi
 
-# Cleanup
-rm -rf "$EXTRACT_DIR"
-rm -f "$ZIP_FILE"
 log "--- LoxIO Core Manual Update Finished ---"

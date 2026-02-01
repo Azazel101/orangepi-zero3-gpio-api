@@ -72,18 +72,14 @@ fi
 NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 log "Updated to commit: $NEW_COMMIT"
 
-# 5. Restart services (run in background to avoid being killed when API restarts)
+# 5. Restart services using systemd-run to ensure they complete independently
 log "Restarting services..."
-(
-    systemctl restart "$SERVICE" || log "Warning: Failed to restart $SERVICE"
-    log "Service $SERVICE restarted"
-    systemctl restart "$WEB_SERVICE" || log "Warning: Failed to restart $WEB_SERVICE"
-    log "Service $WEB_SERVICE restarted"
-) &
-RESTART_PID=$!
+systemd-run --no-block --unit=loxio-restart-api systemctl restart "$SERVICE"
+systemd-run --no-block --unit=loxio-restart-web systemctl restart "$WEB_SERVICE"
+log "Service restart commands issued"
 
-# Wait for restarts to complete
-sleep 3
+# Brief pause for systemd to start the transient units
+sleep 1
 
 # 6. Verify health with exponential backoff
 log "Verifying service health..."
